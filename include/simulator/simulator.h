@@ -9,6 +9,7 @@
 
 #include <thread>
 #include <iostream>
+#include <cstdint>
 #include <functional>
 
 #include <simulator/configuration_loader.h>
@@ -41,7 +42,8 @@ public:
 
     // One simulation step. Public so that tests can drive the loop without the
     // timer thread; the emulator itself still gets here through timer::start().
-    void step(unsigned int _ts);
+    // _ts is simulated time in microseconds, 64-bit: see the note in timer.h.
+    void step(std::uint64_t _ts);
 
     // Runs n steps back to back in the calling thread, with the same simulated
     // time base as the fast mode of the ticker (1 ms per step).
