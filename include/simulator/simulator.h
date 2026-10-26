@@ -13,6 +13,7 @@
 #include <functional>
 
 #include <simulator/configuration_loader.h>
+#include <simulator/controller_registry.h>
 #include <ue/ue_handler.h>
 #include <mac_layer/mac_layer.h>
 #include <timer/timer.h>
@@ -52,6 +53,8 @@ public:
     // For tests: the UE list is final after the constructor returns.
     std::vector<ue>* ue_list() { return ue_h.get_ue_list(); }
     control_manager& control_plane() { return control; }
+    // For tests: number of calls to step() so far.
+    std::uint64_t steps_done() const { return total_steps; }
 
 private: 
 
@@ -65,6 +68,8 @@ private:
     ue_handler ue_h; 
     mac_layer mac_l;
     control_manager control;
+    // Built at the end of the constructor from the controller registry, called from step().
+    std::vector<controller_instance> controllers;
 private: 
     int freq = 1000; 
     int step_c = 0; 
