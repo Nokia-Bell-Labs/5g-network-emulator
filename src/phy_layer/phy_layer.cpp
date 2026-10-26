@@ -32,6 +32,8 @@ void phy_layer::init_metric(int _index)
 {
     // Metric variables
     metric_i.index = _index;
+    metric_i.ue_id = _index;
+    metric_i.tx_dir = tx_dir;
 }
 
 void phy_layer::init_scenario(int _type, float _eNB_h, float _w, float _antenna_h, float _ue_h, float _ue_speed)
@@ -982,6 +984,7 @@ void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float 
     last_distance = distance;
     o2i = _o2i;
     tx_dir = _tx_dir;
+    metric_i.tx_dir = _tx_dir;
     macro_fading = _macro_fading;
     sinr_offset_db = _sinr_offset_db;
 
