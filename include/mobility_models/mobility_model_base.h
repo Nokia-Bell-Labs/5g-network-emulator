@@ -10,6 +10,7 @@
 #include <math.h>
 #include <random>
 #include <memory>
+#include <utils/rng_seed.h>
 #include <chrono>
 #include <iostream>
 #include <functional>
@@ -54,6 +55,21 @@ public:
     float get_max_speed(){ return speed + speed_var; }
     float x();
     float y();
+
+    // Runtime control setters. Position is input state, not derived, so assigning it is
+    // legitimate; the models rebuild whatever they cache from it on the next update_pos().
+    virtual void set_pos(float x, float y)
+    {
+        const float cx = std::min(fabs(x), max_apothem) * (x < 0 ? -1 : 1);
+        const float cy = std::min(fabs(y), max_apothem) * (y < 0 ? -1 : 1);
+        current_pos = pos2d(cx, cy);
+        current_distance = current_pos.get_distance();
+    }
+    // Speed in m/s, the internal unit. The km/h of the .ini and of the control channel is
+    // converted by the caller with the same TOMS constant the loader uses.
+    void set_speed(float speed_ms) { speed = speed_ms; }
+    float get_speed() const { return speed; }
+    float get_apothem() const { return max_apothem; }
    
 
 protected: 

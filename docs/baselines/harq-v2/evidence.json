@@ -1,0 +1,183 @@
+{
+  "artifacts": [
+    {
+      "path": "docs/baselines/harq-v2/comparison.csv",
+      "sha256": "e3408750a46bf511c565bb3e330fae2dba15e86944bc951c4e02832b65ecabfe"
+    },
+    {
+      "path": "docs/baselines/harq-v2/disabled-analysis-metadata.json",
+      "sha256": "592e81e20f8045a7d85a217a3bdd96d7e5b2cb885b9a71cd431875859047b207"
+    },
+    {
+      "path": "docs/baselines/harq-v2/disabled-manifest.json",
+      "sha256": "9715bbe7b423126a54124301d6a239fb50f5e84a25cb0e82005a062586f37248"
+    },
+    {
+      "path": "docs/baselines/harq-v2/disabled-profile-summary.csv",
+      "sha256": "d853ce3efab3668f4758d984c86256e6469647edb3321b40a81ba1814e352dbc"
+    },
+    {
+      "path": "docs/baselines/harq-v2/disabled-report.md",
+      "sha256": "0f88f53c8cbee03b8357b5b03bdf33f520d696a0a91f56a1283e54164843ef83"
+    },
+    {
+      "path": "docs/baselines/harq-v2/disabled-ue-summary.csv",
+      "sha256": "3b594783dde7fae515a55c472664de64d0927bb9e96042074c0da786b0521fd7"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-no-retry-analysis-metadata.json",
+      "sha256": "fe0f0674dc69fe92b4eec82b3190f5785722d0447ccb5bdec3b0899777128351"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-no-retry-manifest.json",
+      "sha256": "6c0b3442ba46e5d9d6e716f46b2c0d5367cc7f71306a75e52ab4fae47a3e2b95"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-no-retry-profile-summary.csv",
+      "sha256": "c18d415bce6426145f696eafab61b52562355d065356b62f1c7fe04d713306fb"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-no-retry-report.md",
+      "sha256": "5e345dcd6c62bfac806d127bee3ef866b32e008c20fcd56993e9fe823620eef3"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-no-retry-ue-summary.csv",
+      "sha256": "6fed60fcfe5aa78ce231a3b0035335afa91b2c05bed0c50c2b16218735cad7cf"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-observable-analysis-metadata.json",
+      "sha256": "34e8baf09fda9f836cf62940c90c6890fe7d8215d5489d1a20b81b1cfdf407d6"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-observable-manifest.json",
+      "sha256": "926c3a1ae0265e31a6687340ec8aeb523728d12cf49a33613e47b5bc2ed44656"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-observable-profile-summary.csv",
+      "sha256": "3cd6fe114aeab4281a7d1f9f72a5140f3fa83f9072c2badf04c836c1573468da"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-observable-report.md",
+      "sha256": "02fb937c60b7c7d16b86cea688075b07ad61f793dfab36ff5117312c4ffbb5d6"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-observable-ue-summary.csv",
+      "sha256": "72d3147e0e7bd6be796f9383a457881709427d57afdde8096353cc1392fe612c"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-paired-analysis-metadata.json",
+      "sha256": "ecc2453e55d5f05f64bd11d3a7994b95c9b6ca9c5c62091ba92f8fedd512e373"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-paired-manifest.json",
+      "sha256": "5a3f2f260d329ce6e72eff196e0bec487141aac114c67188fde9cf8af097b837"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-paired-profile-summary.csv",
+      "sha256": "fef696c9f9ff4d1d9aa871d7b0128b463d38847f4404e4bc980c29e6c2b09679"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-paired-report.md",
+      "sha256": "c95bf1ccf0613be04078219f991758fd463a04be387dc5aeeb86cceab88979cc"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-paired-ue-summary.csv",
+      "sha256": "171dd1b1d1659ac64ea1dd146f854dd76e0657c206c6ed4bfdddb578ac19b3fd"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260928-analysis-metadata.json",
+      "sha256": "de0499ee5a93eaf5182f770a58673969dacaba559afe717004f8287c10c335b1"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260928-manifest.json",
+      "sha256": "93666bb24a8e0a88aa05d44319229d4b16bec5e82c88bc7a8f3303813aac96f9"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260928-profile-summary.csv",
+      "sha256": "182f01057c493b239b0058bd71fc359ccda88d79b15dce5d789beffc3c56d4f9"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260928-report.md",
+      "sha256": "cb76863b501a696eb7c0ac7fc2bf702253dbc86c7b19b685a898cefe07d67d3f"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260928-ue-summary.csv",
+      "sha256": "3bf99fad25d56ae2c90118daea0276ad7ee40eb1b3352a7d08dd21015876f71d"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260929-analysis-metadata.json",
+      "sha256": "1c3dbf5209f408cd73700c2d0bc36b48474e4681b3724f50b4d4cfc99edb926d"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260929-manifest.json",
+      "sha256": "eb35127bccbdb7e811c0807ad9be27e32fc6fac11b4cab264a977cb1e6e99b87"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260929-profile-summary.csv",
+      "sha256": "ef854261bcfb40f92c1e11f8113e54acc0d2e998f4a31ea7a5cfa9f1f64b52a9"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260929-report.md",
+      "sha256": "77cb79688e6b5e9302a4681b82b3b9784f1941aad35fb13d31977ba1b116c584"
+    },
+    {
+      "path": "docs/baselines/harq-v2/legacy-production-seed-20260929-ue-summary.csv",
+      "sha256": "60ae3c68239f2baf099c11a6698b1ea7f36ce8d62d11cbca431caad4ad170461"
+    },
+    {
+      "path": "docs/baselines/harq-v2/report.md",
+      "sha256": "2c090e52636335177703b65e4fbaacf66269f6c0b5d16554ddf883f90cb9bcac"
+    }
+  ],
+  "campaigns": [
+    {
+      "duration_s": 180,
+      "label": "disabled",
+      "manifest": "docs/baselines/harq-v2/disabled-manifest.json",
+      "manifest_sha256": "9715bbe7b423126a54124301d6a239fb50f5e84a25cb0e82005a062586f37248",
+      "seed": 20260927,
+      "source_sha": "7a0c8d773e18fec3531e40892a8156bda4350c12"
+    },
+    {
+      "duration_s": 180,
+      "label": "legacy-no-retry",
+      "manifest": "docs/baselines/harq-v2/legacy-no-retry-manifest.json",
+      "manifest_sha256": "6c0b3442ba46e5d9d6e716f46b2c0d5367cc7f71306a75e52ab4fae47a3e2b95",
+      "seed": 20260927,
+      "source_sha": "7a0c8d773e18fec3531e40892a8156bda4350c12"
+    },
+    {
+      "duration_s": 180,
+      "label": "legacy-production-paired",
+      "manifest": "docs/baselines/harq-v2/legacy-production-paired-manifest.json",
+      "manifest_sha256": "5a3f2f260d329ce6e72eff196e0bec487141aac114c67188fde9cf8af097b837",
+      "seed": 20260927,
+      "source_sha": "7a0c8d773e18fec3531e40892a8156bda4350c12"
+    },
+    {
+      "duration_s": 180,
+      "label": "legacy-production-observable",
+      "manifest": "docs/baselines/harq-v2/legacy-production-observable-manifest.json",
+      "manifest_sha256": "926c3a1ae0265e31a6687340ec8aeb523728d12cf49a33613e47b5bc2ed44656",
+      "seed": 20260927,
+      "source_sha": "4e4ec5fdd26a74ad9c0b838313f39de4d0c9b021"
+    },
+    {
+      "duration_s": 30,
+      "label": "legacy-production-seed-20260928",
+      "manifest": "docs/baselines/harq-v2/legacy-production-seed-20260928-manifest.json",
+      "manifest_sha256": "93666bb24a8e0a88aa05d44319229d4b16bec5e82c88bc7a8f3303813aac96f9",
+      "seed": 20260928,
+      "source_sha": "4e4ec5fdd26a74ad9c0b838313f39de4d0c9b021"
+    },
+    {
+      "duration_s": 30,
+      "label": "legacy-production-seed-20260929",
+      "manifest": "docs/baselines/harq-v2/legacy-production-seed-20260929-manifest.json",
+      "manifest_sha256": "eb35127bccbdb7e811c0807ad9be27e32fc6fac11b4cab264a977cb1e6e99b87",
+      "seed": 20260929,
+      "source_sha": "4e4ec5fdd26a74ad9c0b838313f39de4d0c9b021"
+    }
+  ],
+  "schema_version": 1
+}

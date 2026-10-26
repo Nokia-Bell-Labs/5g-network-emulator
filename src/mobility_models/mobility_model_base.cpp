@@ -9,10 +9,17 @@
 mobility_model_base::mobility_model_base(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var,
                                          float _max_distance, float _time_target, float maxApothem,
                                          float _time_target_var, bool _random_v)
-    : uniform_gen(time(NULL) * _random_v + id)
+    : uniform_gen(rng_seed(_random_v, RNG_MOBILITY, (std::uint64_t)id))
 {
     max_distance = _max_distance;
     max_apothem = maxApothem;
+    if (max_distance > std::sqrt(2.0f) * max_apothem)
+    {
+        std::cerr
+            << "Warning: mobility max_distance exceeds the map corner; "
+            << "positions outside the map are rejected or clamped."
+            << std::endl;
+    }
 
     if (!_random_init)
     {
@@ -37,8 +44,17 @@ mobility_model_base::mobility_model_base(int id, pos2d _init_pos, bool _random_i
 }
 
 mobility_model_base::mobility_model_base(int id, mobility_config mobility_c, float maxApothem)
-    : uniform_gen(time(NULL) * mobility_c.random_v + id)
+    : uniform_gen(rng_seed(mobility_c.random_v, RNG_MOBILITY, (std::uint64_t)id))
 {
+    max_distance = mobility_c.max_distance;
+    max_apothem = maxApothem;
+    if (max_distance > std::sqrt(2.0f) * max_apothem)
+    {
+        std::cerr
+            << "Warning: mobility max_distance exceeds the map corner; "
+            << "positions outside the map are rejected or clamped."
+            << std::endl;
+    }
     if (!mobility_c.random_init)
     {
         float init_x = std::min(fabs(mobility_c.init_pos.x), max_apothem) * (mobility_c.init_pos.x < 0 ? -1 : 1);
@@ -47,9 +63,7 @@ mobility_model_base::mobility_model_base(int id, mobility_config mobility_c, flo
     }
     else
     {
-        float radius = fabs(uniform_dist(uniform_gen) * mobility_c.max_distance);
-        float theta = fabs(uniform_dist(uniform_gen) * 2 * M_PI);
-        current_pos = pos2d(radius * cos(theta), radius * sin(theta));
+        set_random_initial_position(max_apothem);
     }
 
     speed = mobility_c.speed;
@@ -60,9 +74,7 @@ mobility_model_base::mobility_model_base(int id, mobility_config mobility_c, flo
     time_target_var = mobility_c.time_target_var;
     t_target = 0;
     target_pos = pos2d();
-    max_distance = mobility_c.max_distance;
     past_t = 0;
-    max_apothem = maxApothem;
 }
 
 void mobility_model_base::set_random_initial_position(float max_apothem)

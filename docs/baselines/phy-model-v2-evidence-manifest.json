@@ -1,0 +1,330 @@
+{
+  "artifact_policy": "Committed summaries and portable rendered inputs are hash-verified; raw logs remain local and are reproducible but not archived.",
+  "canonical_profiles": [
+    {
+      "id": "umi-n40-npn",
+      "path": "docs/baselines/phy-v2-production-inputs/offline_umi_n40_npn.ini",
+      "protocol_baseline_sha256": "f15f1d959e356be4c5403e1628df061cb0554117b881a951e24ac700f66bd6ac",
+      "validated_sha256": "b2a5f048b83d8e82667c80e4a24c7e40b773a60638deda76d0d1d826063d23d3"
+    },
+    {
+      "id": "uma-n78-pedestrian",
+      "path": "docs/baselines/phy-v2-production-inputs/offline_uma_n78_pedestrian.ini",
+      "protocol_baseline_sha256": "9d9d83e1a46bc5626b69fd3f625be359675725daf33169a1ef9216c638c403a4",
+      "validated_sha256": "eadedcf4b89af445baaf403294d2cea1edcd45d8c5b76e97ff8615a02ac934ff"
+    },
+    {
+      "id": "rma-n78-vehicular",
+      "path": "docs/baselines/phy-v2-production-inputs/offline_rural_n78_vehicular.ini",
+      "protocol_baseline_sha256": "d3669745449ca60dd117b590003bac255f8c425c234f70ba34aadcefcfdaa260",
+      "validated_sha256": "f80d526487959535eff1a52874c595255fea84813df1a8fd82e92f84f2899f6d"
+    },
+    {
+      "id": "indoor-n78-pedestrian",
+      "path": "docs/baselines/phy-v2-production-inputs/offline_indoor_hotspot_n78_pedestrian.ini",
+      "protocol_baseline_sha256": "a9ee97ceb1ffe3d98d68afc2f589911877d39820d5a4e2e9860b69c83a83ce1e",
+      "validated_sha256": "f0f50b5b46d3690ec13f70c8dcc26e09d759690e184743b01434d9b81baf5bc4"
+    },
+    {
+      "id": "umi-n258-fwa",
+      "path": "docs/baselines/phy-v2-production-inputs/offline_umi_n258_fwa.ini",
+      "protocol_baseline_sha256": "3f791536bf7a04e61e199ea4b09e9dfe646a00a37580e68b2c8bca91d97c609b",
+      "validated_sha256": "ecbedd24728cd9bb8eea15c1e0a10ae1059dafa8c97f1966bdaf486ecbece09b"
+    }
+  ],
+  "committed_evidence": [
+    {
+      "id": "map-v2.1-activation",
+      "path": "docs/baselines/map-v2.1-activation.md",
+      "sha256": "ba0f2f15ab28f0dd934117edf83b3b1893b88efcf57cdae3b54305fa3927e1ea"
+    },
+    {
+      "id": "map-v2.1-multiseed-summary",
+      "path": "docs/baselines/map-v2-multiseed-summary.csv",
+      "sha256": "ed8e5b01470bf3233ac914d5b1b6413439ad8b6a5d7402b4a931bac72f395245"
+    },
+    {
+      "id": "map-v2.1-los-radial",
+      "path": "docs/baselines/map-v2-multiseed-los-radial.csv",
+      "sha256": "b7e9d9281cc03f713d5a68c374e44f7577928c3ca6f4ebd6ad443ca11f45dbdd"
+    },
+    {
+      "id": "map-v2.1-statistics-metadata",
+      "path": "docs/baselines/map-v2-multiseed-metadata.json",
+      "sha256": "4e4997e29ef09a0e15e76f7ad159eccf86bc2ea0ce045e1f7ace5bcab20c7252"
+    },
+    {
+      "id": "map-v2.1-statistics-report",
+      "path": "docs/baselines/map-v2-multiseed-validation.md",
+      "sha256": "504f1105741d006b98e3c3b496979cb3168b8336c07c8f783424fbcec97d4e2d"
+    },
+    {
+      "id": "map-v2.1-paired-profile-comparison",
+      "path": "docs/baselines/map-v2.1-paired-profile-comparison.csv",
+      "sha256": "464c4e42465f4a56d5724efb25268a5b0bc9007ef3fb0fc81f976b2d1a7c626a"
+    },
+    {
+      "id": "production-profile-ue-summary",
+      "path": "docs/baselines/phy-v2-production-ue-summary.csv",
+      "sha256": "0e83a2be97692672eb084929000b318733dcd94d650dbb2b4cece1744cb503c6"
+    },
+    {
+      "id": "production-whole-run-summary",
+      "path": "docs/baselines/phy-v2-production-whole-run-summary.csv",
+      "sha256": "98844f367e259515bb9d6358c0b7ed2e2d1c608e543bc27b9a4522855b1515c5"
+    },
+    {
+      "id": "production-analysis-metadata",
+      "path": "docs/baselines/phy-v2-production-analysis-metadata.json",
+      "sha256": "28dfc33f5683bc3e2e7ee338e2bac8294bb430abe80965fb5e18aa88ed4ffb2c"
+    },
+    {
+      "id": "production-validation-report",
+      "path": "docs/baselines/phy-v2-production-validation.md",
+      "sha256": "cff179cbf1bd5de68b41c030653d0667d6c437768773356b649af44740aea3b4"
+    },
+    {
+      "id": "original-production-comparison",
+      "path": "docs/baselines/phy-v2-production-comparison.csv",
+      "sha256": "7c5ea61e967626a752518f6ad17a3d3f572e711ebd9adf2d9c0d53d14309b0e2"
+    },
+    {
+      "id": "controlled-o2i-comparison",
+      "path": "docs/baselines/phy-v2-o2i-controlled-comparison.csv",
+      "sha256": "43c6761b5fe6786b6a614bcafd326c3ff12b6d631b0a2cb25287b32113d42642"
+    },
+    {
+      "id": "controlled-o2i-crn-check",
+      "path": "docs/baselines/phy-v2-o2i-crn-check.csv",
+      "sha256": "93d5fa1aa3a2b916d83be6e401c9f57a9e92c0431e33dbb106aa1d110e7549f5"
+    },
+    {
+      "id": "o2i-high-loss-ue-summary",
+      "path": "docs/baselines/phy-v2-o2i-high-loss-ue-summary.csv",
+      "sha256": "1517d1e92167e21666ab1041fda533affb7d7ef4a08ebfcb9bd33ae79828d344"
+    },
+    {
+      "id": "legacy-paired-validation",
+      "path": "docs/baselines/phy-v2-legacy-paired-validation.md",
+      "sha256": "ff1fe9d6bd9187b47c1cd9c37d890b2c8c1c5527cdbbfad51f34e20ff342462a"
+    },
+    {
+      "id": "pf-runtime-envelope",
+      "path": "docs/baselines/pf-runtime-envelope.csv",
+      "sha256": "c51315bb918533a5d6148d8854dfecfd93e79ab9ff5e48dbcc5ccfc5947ca2fb"
+    },
+    {
+      "id": "pf-runtime-samples",
+      "path": "docs/baselines/pf-runtime-samples.csv",
+      "sha256": "9f834ae499abb329de4581bbe07b899653caa1a133b890323980d3610b7bb2d6"
+    },
+    {
+      "id": "pf-runtime-metadata",
+      "path": "docs/baselines/pf-runtime-metadata.json",
+      "sha256": "722d53c1ec0d0faa17504ac79b338b38fa0c95fb3bcb6e03742a10e4b6f05294"
+    },
+    {
+      "id": "pf-runtime-report",
+      "path": "docs/baselines/pf-runtime-envelope.md",
+      "sha256": "b18b70fb4195b4ee77424c7cf6cf017a6300cec04433c8a89c753cecf1186957"
+    },
+    {
+      "id": "pf-functional-long",
+      "path": "docs/baselines/pf-functional-long.csv",
+      "sha256": "d08f125a02e5d175e7292a7dbaf365a4d0a8f1b6bd125e3d8a1a84f269c7b036"
+    },
+    {
+      "id": "pf-functional-long-metadata",
+      "path": "docs/baselines/pf-functional-long-metadata.json",
+      "sha256": "a4bae5ab20ad33c5526ddd19661ae6a674ef5b12cc4ce6f31747ca51d376db0e"
+    },
+    {
+      "id": "pf-functional-long-report",
+      "path": "docs/baselines/pf-functional-long.md",
+      "sha256": "9b0241febda79788714b5e690c7b422b1117ac004e4e2d21942fd38698b37c7e"
+    },
+    {
+      "id": "validation-matrix",
+      "path": "docs/baselines/phy-v2-validation-matrix.md",
+      "sha256": "df63e42ae6283da3b308d93545762de7981b35227fb18067f70291f3fbf2e61a"
+    },
+    {
+      "id": "evidence-protocol",
+      "path": "docs/phy-model-v2-evidence-protocol.md",
+      "sha256": "86c982123c1c043a738d908f131910dae501b3db4e72ab1073b310ec5a62c829"
+    },
+    {
+      "id": "literature-set",
+      "path": "docs/phy-model-v2-literature.md",
+      "sha256": "5afab2da5e00da8a0254fd5d9e4d8d9be0f2aed285d09426873196fa71a9c0ec"
+    },
+    {
+      "id": "manuscript",
+      "path": "docs/phy-model-evolution-external-review.md",
+      "sha256": "18bc059123a081608e560c46d4afad577769d8fe1db13a6dc0259161745e730e"
+    },
+    {
+      "id": "throughput-scheduler-guide",
+      "path": "docs/throughput-schedulers.md",
+      "sha256": "97a7356c9d5c0b55ee2033ee5432cf5114e7d7de30e440fa246f2d4abfb50789"
+    },
+    {
+      "id": "harq-design-guide",
+      "path": "docs/harq-legacy-bler.md",
+      "sha256": "94dbe65627d30d7d7529acc4fde06ad3d6ef17be35db4499cfb37299f68607f9"
+    },
+    {
+      "id": "legacy-bler-table-characterization",
+      "path": "docs/baselines/legacy-bler-table.json",
+      "sha256": "d3339e05628b30b00a39c3a5ee9ea0e609589da4e34544ee1d536c7b2e4d750c"
+    },
+    {
+      "id": "harq-campaign-report",
+      "path": "docs/baselines/harq-v2/report.md",
+      "sha256": "2c090e52636335177703b65e4fbaacf66269f6c0b5d16554ddf883f90cb9bcac"
+    },
+    {
+      "id": "python-dependency-lock",
+      "path": "tools/requirements-phy-v2.txt",
+      "sha256": "50bf6d6ce96604e94b8b8071bd9962ded609d800f73b3750e21f49187f782f3e"
+    },
+    {
+      "id": "figure-pipeline",
+      "path": "docs/figures/phy-v2-pipeline.svg",
+      "sha256": "8e72cdc15bbff85b21f794fc21846cd806c8bf6f559ed9646cc8e94f5135e021"
+    },
+    {
+      "id": "figure-map-los",
+      "path": "docs/figures/phy-v2-map-los.svg",
+      "sha256": "d36d640e5a91567a9a84c15d900060b7a23cf5399632d4c4df48dde200cf62ff"
+    },
+    {
+      "id": "figure-throughput",
+      "path": "docs/figures/phy-v2-throughput.svg",
+      "sha256": "31a7ed06102aa6acd016073c3052920df02307d2d4a8fd413a98913530c39c98"
+    },
+    {
+      "id": "figure-reranking",
+      "path": "docs/figures/phy-v2-reranking.svg",
+      "sha256": "e73eb57b9ac1a0b82bd0119a2133207b6564196f3a7279167ca85ff12300180b"
+    },
+    {
+      "id": "figure-runtime",
+      "path": "docs/figures/phy-v2-runtime.svg",
+      "sha256": "2a44898bcd021594a9072a80ad92916f39b4d453fa2ac49bf0cdf9a4d4722ff1"
+    }
+  ],
+  "environment": {
+    "architecture": "x86_64",
+    "compiler": "g++ 11.4.0",
+    "cpu": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "hostname": "pitahaya",
+    "kernel": "Linux 5.15.0-58-generic",
+    "logical_cpus": 16,
+    "node": "24.5.0",
+    "numpy": "2.2.6",
+    "python": "3.10.4"
+  },
+  "harq_evidence": {
+    "path": "docs/baselines/harq-final-v2/evidence.json",
+    "sha256": "74133d7dcb453270439663a52be297b33bdf9661cb706cc64c08375870b2bbd0"
+  },
+  "historical_harq_evidence": [
+    {
+      "path": "docs/baselines/harq-v2/evidence.json",
+      "sha256": "8b430892c102098219f8d369b3d4ff9c302f66f31451ed07bd069c90e893a45e"
+    }
+  ],
+  "map_generation": {
+    "catalog_size": 21,
+    "cell_number": 291,
+    "generator_version": "2.1.0",
+    "master_seed": 20260927,
+    "production_catalog": {
+      "path": "include/maps_scenarios/CATALOG.json",
+      "sha256": "57449bd7ea961aba3359be973ca34363102ca5ee3903b56a5b7336f6becdbcd0"
+    },
+    "production_manifest": {
+      "path": "include/maps_scenarios/MANIFEST.json",
+      "sha256": "0e3fe2f1b46584f786d2efa046bdd0bbbe8b17c1064d0fd239d971b96af269f1"
+    },
+    "semantic_version": "2.1.0"
+  },
+  "pending_evidence": [],
+  "protocol": "docs/phy-model-v2-evidence-protocol.md",
+  "protocol_date": "2026-09-30",
+  "rebase_source_map": {
+    "path": "docs/baselines/final-rebase-source-map.json",
+    "sha256": "1234ec23892c654ce8f4949818cf36a5bf51f77ed9733673460bcdc46f516042"
+  },
+  "run_batches": [
+    {
+      "duration_s": 180,
+      "id": "phy-v2-baseline-e995563-seed20260924",
+      "seed": 20260924,
+      "source_sha": "e995563fd3e8fa300f4b0accca3b494f7177101c",
+      "summary": "docs/baselines/phy-model-v2-baseline.csv",
+      "summary_sha256": "a3fd4386f0951af11de3740839ef30dc3a2345b76fc03b229a933526f9e2dc8e"
+    },
+    {
+      "duration_s": 180,
+      "id": "phy-v2-rebased-1b55ca1-seed20260927",
+      "manifest": "docs/baselines/phy-v2-production-run-manifest.json",
+      "manifest_sha256": "da24385d3723f99b15732a26e4aec82057120578a9c0720480380101b466fdff",
+      "seed": 20260927,
+      "source_sha": "1b55ca191e27a368936476fff33fc622833d8d13",
+      "summary": "docs/baselines/phy-v2-production-profile-summary.csv",
+      "summary_sha256": "13ac6384303220c92438595754d7b553441cacd7f828f019ff261d3f107dc375",
+      "warmup_s": 20
+    },
+    {
+      "duration_s": 180,
+      "id": "phy-v2-o2i-rebased-1b55ca1-seed20260927",
+      "manifest": "docs/baselines/phy-v2-o2i-high-loss-run-manifest.json",
+      "manifest_sha256": "9e1a47f134d37a09ddc724133cf8aeec0e734083cbf32d05a700ba2203eb62ed",
+      "seed": 20260927,
+      "source_sha": "1b55ca191e27a368936476fff33fc622833d8d13",
+      "summary": "docs/baselines/phy-v2-o2i-high-loss-summary.csv",
+      "summary_sha256": "b9c0d0ce1f386b4c4d3e3cfd6bd8c5d1742d96c1f97b5344e82460f663708c3d",
+      "warmup_s": 20
+    },
+    {
+      "duration_s": 180,
+      "id": "phy-v2-legacy-rebased-1b55ca1-seed20260927",
+      "manifest": "docs/baselines/phy-v2-legacy-paired-run-manifest.json",
+      "manifest_sha256": "2d4672083849d7fad7268abe14ce9ec3cb9e2d0d900c0c2efa69b2a5f1111604",
+      "seed": 20260927,
+      "source_sha": "1b55ca191e27a368936476fff33fc622833d8d13",
+      "summary": "docs/baselines/phy-v2-legacy-paired-summary.csv",
+      "summary_sha256": "e95aaeba1878f6a98b1ecba3c87bf0100a261e55b53f855cf8db7e0924978348",
+      "warmup_s": 20
+    }
+  ],
+  "schema_version": 3,
+  "scheduler_evidence": {
+    "path": "docs/baselines/scheduler-family-final/evidence.json",
+    "sha256": "141d62c8cef94d9956be5cac367c871d3fa1014a54a9cbbc49043723a44c45e3"
+  },
+  "historical_scheduler_evidence": [
+    {
+      "path": "docs/baselines/scheduler-family-v2/evidence.json",
+      "sha256": "00e972398aba4746b4bc39028650e84f27bdf3f4939776a9cd156ab56b328824"
+    }
+  ],
+  "source": {
+    "analyzer_source_sha": "1b55ca191e27a368936476fff33fc622833d8d13",
+    "branch": "feature/phy-model-v2",
+    "current_analyzer_source_sha": "6770c645709517af5da8edf6ca9441f14c670374",
+    "dev_baseline_sha": "325dfadd3809b2d7def25a980ef6782e1819ce48",
+    "feature_baseline_sha": "53fa98a08acb462647b248b091fdfd4e769d803f",
+    "harq_analyzer_source_sha": "6770c645709517af5da8edf6ca9441f14c670374",
+    "implementation_source_sha": "3094abdfc2546bfe8e9a7c57cb1f005e337a35b0",
+    "initial_dev_baseline_sha": "e995563fd3e8fa300f4b0accca3b494f7177101c",
+    "map_catalog_source_sha": "278d4d5028ef6235e28ad60b4d593aea11dbe2aa",
+    "map_statistics_source_sha": "be8dcb4d550b8ce42d22640ed66c13c9139d0a08",
+    "packet_profile_source_sha": "6770c645709517af5da8edf6ca9441f14c670374",
+    "profile_config_source_sha": "dabcf3261462bf32256321dedeb81334bbe7d0c0",
+    "runtime_benchmark_source_sha": "1b55ca191e27a368936476fff33fc622833d8d13"
+  },
+  "study": "FikoRE PHY Model V2"
+}

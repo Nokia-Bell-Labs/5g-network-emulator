@@ -29,6 +29,10 @@ public:
 
     int get_pkt_size(int tx);
 
+    // Target rate in bits per second.
+    void set_target(int tx, float bps);
+    float get_target(int tx) const;
+
 private: 
     std::unique_ptr<traffic_model_base> traff_model; 
 };

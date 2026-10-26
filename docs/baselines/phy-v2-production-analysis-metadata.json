@@ -1,0 +1,14 @@
+{
+  "analyzer_source_sha": "1b55ca191e27a368936476fff33fc622833d8d13",
+  "delivery_conditioning": "contiguous positive-offer segments, non-outage UE; queue backlog is not observed",
+  "outage_definition": "MCS below zero in >=99% of post-warm-up radio samples",
+  "schema_version": 2,
+  "service_windows_s": [
+    0.01,
+    0.1,
+    1.0
+  ],
+  "source_manifest": "docs/baselines/phy-v2-production-run-manifest.json",
+  "source_manifest_sha256": "773b8c2a090f0b9c96816df020f4e6e5f9e7c6ee47a81694512c3d0a10dfbdc5",
+  "warmup_s": 20.0
+}

@@ -8,7 +8,9 @@
 #include <iomanip>
 #include <iostream>
 #include <libgen.h>
+#include <set>
 #include <sstream>
+#include <stdexcept>
 #include <unistd.h>
 
 #include <utils/terminal_logging.h>
@@ -16,16 +18,26 @@
 
 std::string getBaseMapPath()
 {
+    const std::string map_dir = "include/maps_scenarios/";
+    const std::string prefix = "macroscopic_fading_map_";
+
     char exe_path[1024];
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (len != -1)
     {
         exe_path[len] = '\0';
-        std::string path_str(dirname(exe_path));
-        return path_str + "/../include/maps_scenarios/macroscopic_fading_map_";
+        std::string beside_binary = std::string(dirname(exe_path)) + "/../" + map_dir;
+
+        // bin/fikore sits next to include/, which is what a copied or containerised
+        // deployment relies on. Binaries built elsewhere, such as the test ones under
+        // build/tests/, do not, so fall back to the working directory for them.
+        if (access(beside_binary.c_str(), F_OK) == 0)
+        {
+            return beside_binary + prefix;
+        }
     }
 
-    return "include/maps_scenarios/macroscopic_fading_map_";
+    return map_dir + prefix;
 }
 
 ue_full_config::ue_full_config()
@@ -34,6 +46,8 @@ ue_full_config::ue_full_config()
     ue_c.ue_m.n_antennas = N_ANTENNAS_DEFAULT;
     ue_c.ue_m.alpha_ul = ALPHA_UL_DEFAULT;
     ue_c.ue_m.nominal_pusch_p0 = NOMINAL_PUSCH_P0_DEFAULT;
+    ue_c.ue_m.power_mode = ul_power_mode::fixed;
+    ue_c.ue_m.tx_power_ul = TX_POWER_UL_DEFAULT;
     ue_c.ue_m.cqi_period = CQI_PERIOD_DEFAULT;
     ue_c.ue_m.ri_period = RI_PERIOD_DEFAULT;
     // TRAFFIC MODEL CONFIG
@@ -64,6 +78,8 @@ ue_full_config::ue_full_config()
     ue_c.priority = DEFAULT_UE_PRIORITY;
     ue_c.ue_m.ue_h = UE_HEIGHT_DEFAULT;
     ue_c.ue_m.o2i = O2I_DEFAULT;
+    ue_c.ue_m.penetration_profile = PENETRATION_NONE;
+    ue_c.ue_m.vehicle_profile = VEHICLE_STANDARD;
 }
 
 enb_config::enb_config(phy_enb_config _phy_config, pdcp_config _pdcp_ul, pdcp_config _pdcp_dl)
@@ -114,7 +130,6 @@ void configuration_loader::load(std::string cfg_file)
                                 LOG_INFO_I("configuration_loader::load") << "Adding UEs with config [" << value << "]: " << END();
                                 ue_full_config ue_c;
                                 ue_c.id = value;
-                                ue_c.ue_c.log_id = get_unique_id();
                                 ue_c_list.push_back(ue_c);
                                 ue_c_list.back().ue_c.mobility_c.random_v = random_v;
                                 ue_c_list.back().ue_c.traffic_c.random_v = random_v;
@@ -137,12 +152,15 @@ void configuration_loader::load(std::string cfg_file)
                                 ue_c_list.back().ue_c.ue_m.nominal_pusch_p0 = std::stof(value);
                             if (key == "tx_power_ul")
                                 ue_c_list.back().ue_c.ue_m.tx_power_ul = std::stof(value);
-                            if (key == "set_ul_pow")
+                            if (key == "ul_power_mode")
                             {
-                                if (value == "true" || value == "1")
-                                    ue_c_list.back().ue_c.ue_m.set_ul_pow = true;
-                                if (value == "false" || value == "0")
-                                    ue_c_list.back().ue_c.ue_m.set_ul_pow = false;
+                                if (value == "fixed")
+                                    ue_c_list.back().ue_c.ue_m.power_mode = ul_power_mode::fixed;
+                                else if (value == "fractional")
+                                    ue_c_list.back().ue_c.ue_m.power_mode = ul_power_mode::fractional;
+                                else
+                                    throw std::invalid_argument(
+                                        "ul_power_mode must be fixed or fractional");
                             }
                             if (key == "cqi_period")
                                 ue_c_list.back().ue_c.ue_m.cqi_period = std::stoi(value);
@@ -165,7 +183,7 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "delay")
                                 ue_c_list.back().ue_c.traffic_c.delay = std::stof(value);
                             if (key == "var_perc")
-                                ue_c_list.back().ue_c.traffic_c.var_perc = random_v ? std::stof(value) : 0;
+                                ue_c_list.back().ue_c.traffic_c.var_perc = std::stof(value);
                             if (key == "pkt_size")
                                 ue_c_list.back().ue_c.traffic_c.pkt_size = std::stoi(value);
                             if (key == "traffic_type")
@@ -199,7 +217,10 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "delay_t_metric")
                                 ue_c_list.back().ue_c.delay_t_metric = std::stof(value);
                             if (key == "beta_metric")
+                            {
                                 ue_c_list.back().ue_c.beta_metric = std::stof(value);
+                                ue_c_list.back().ue_c.beta_metric_configured = true;
+                            }
                             if (key == "pkt_delay_budget")
                                 ue_c_list.back().ue_c.pkt_delay_budget = std::stof(value);
                             if (key == "l4s_dual_queue")
@@ -225,7 +246,61 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "ue_height")
                                 ue_c_list.back().ue_c.ue_m.ue_h = std::stof(value);
                             if (key == "o2i")
+                            {
+                                LOG_WARNING_I("configuration_loader::load")
+                                    << "o2i is deprecated; use ue_location_type, "
+                                    << "building_penetration, and vehicle_penetration"
+                                    << END();
                                 ue_c_list.back().ue_c.ue_m.o2i = std::stoi(value);
+                                ue_c_list.back().ue_c.ue_m.penetration_profile =
+                                    ue_c_list.back().ue_c.ue_m.o2i == IN_BUILDING
+                                        ? PENETRATION_LEGACY_AUTO
+                                        : PENETRATION_NONE;
+                            }
+                            if (key == "location")
+                                throw std::invalid_argument(
+                                    "location is not supported; use ue_location_type");
+                            if (key == "ue_location_type")
+                            {
+                                if (value == "outdoor")
+                                    ue_c_list.back().ue_c.ue_m.o2i = OUTDOOR;
+                                else if (value == "indoor")
+                                    ue_c_list.back().ue_c.ue_m.o2i = IN_BUILDING;
+                                else if (value == "vehicle")
+                                    ue_c_list.back().ue_c.ue_m.o2i = IN_CAR;
+                                else if (value == "random")
+                                    ue_c_list.back().ue_c.ue_m.o2i = LOCATION_RANDOM;
+                                else
+                                    throw std::invalid_argument(
+                                        "ue_location_type must be outdoor, indoor, vehicle, or random");
+                            }
+                            if (key == "building_penetration")
+                            {
+                                if (value == "none")
+                                    ue_c_list.back().ue_c.ue_m.penetration_profile =
+                                        PENETRATION_NONE;
+                                else if (value == "low_loss")
+                                    ue_c_list.back().ue_c.ue_m.penetration_profile =
+                                        PENETRATION_LOW_LOSS;
+                                else if (value == "high_loss")
+                                    ue_c_list.back().ue_c.ue_m.penetration_profile =
+                                        PENETRATION_HIGH_LOSS;
+                                else
+                                    throw std::invalid_argument(
+                                        "building_penetration must be none, low_loss, or high_loss");
+                            }
+                            if (key == "vehicle_penetration")
+                            {
+                                if (value == "standard")
+                                    ue_c_list.back().ue_c.ue_m.vehicle_profile =
+                                        VEHICLE_STANDARD;
+                                else if (value == "metallized")
+                                    ue_c_list.back().ue_c.ue_m.vehicle_profile =
+                                        VEHICLE_METALLIZED;
+                                else
+                                    throw std::invalid_argument(
+                                        "vehicle_penetration must be standard or metallized");
+                            }
                             // LOGGING
                             if (key == "log_freq")
                                 ue_c_list.back().ue_c.log_freq = std::stoi(value);
@@ -267,6 +342,10 @@ void configuration_loader::load(std::string cfg_file)
                                     duration = std::stof(value);
                                 if (key == "period")
                                     period = std::stof(value);
+                                if (key == "seed")
+                                    seed = (std::uint64_t)std::stoull(value);
+                                if (key == "run_id")
+                                    unique_id = value;
                                 if (key == "progress_log_period_s")
                                     progress_log_period_s = std::stof(value);
                                 if (key == "multithreading")
@@ -294,6 +373,21 @@ void configuration_loader::load(std::string cfg_file)
                                 {
                                     scenario_type = std::stoi(value);
                                 }
+                                if (key == "map_file")
+                                {
+                                    map_file = value;
+                                    map_file_explicit = true;
+                                }
+                                if (key == "allow_nearest_map_fallback")
+                                {
+                                    if (value == "true" || value == "1")
+                                        allow_nearest_map_fallback = true;
+                                    else if (value == "false" || value == "0")
+                                        allow_nearest_map_fallback = false;
+                                    else
+                                        throw std::invalid_argument(
+                                            "allow_nearest_map_fallback must be true or false");
+                                }
                             }
                             if (mode == "eNBConfig")
                             {
@@ -315,17 +409,7 @@ void configuration_loader::load(std::string cfg_file)
                                 if (key == "bandwidth")
                                     bandwidth = std::stoi(value);
                                 if (key == "frequency")
-                                {
                                     frequency = std::stod(value);
-                                    std::cout << "frequency " << frequency << std::endl;
-                                    std::cout << "scenario_type " << scenario_type << std::endl;
-                                }
-
-                                map_file = getClosestMapFile(scenario_type, frequency);
-                                if (map_file.empty())
-                                {
-                                    std::cerr << "Failed to find a valid map file for scenario_type: " << scenario_type << " and frequency: " << frequency << std::endl;
-                                }
                             }
                             if (mode == "PDCP_RLC")
                             {
@@ -333,7 +417,7 @@ void configuration_loader::load(std::string cfg_file)
                                 if (key == "backhaul_d")
                                     backhaul_d = std::stof(value);
                                 if (key == "backhaul_d_var")
-                                    backhaul_d_var = random_v ? std::stof(value) : 0;
+                                    backhaul_d_var = std::stof(value);
                                 if (key == "order_pkts")
                                 {
                                     if (value == "true" || value == "1")
@@ -349,6 +433,31 @@ void configuration_loader::load(std::string cfg_file)
                                 // METRIC CONFIG
                                 if (key == "metric_type")
                                     metric_type = std::stoi(value);
+                                if (key == "pf_alpha")
+                                {
+                                    pf_alpha = std::stof(value);
+                                    pf_alpha_configured = true;
+                                }
+                                if (key == "pf_time_window_ms"
+                                    || key == "pf_intra_tti_update")
+                                    throw std::invalid_argument(
+                                        key
+                                        + " was removed; use the corresponding "
+                                          "throughput_* key");
+                                if (key == "throughput_time_window_ms")
+                                    throughput_time_window_ms =
+                                        std::stof(value);
+                                if (key == "throughput_intra_tti_update")
+                                {
+                                    if (value == "none")
+                                        throughput_intra_tti_update = false;
+                                    else if (value == "allocation_unit")
+                                        throughput_intra_tti_update = true;
+                                    else
+                                        throw std::invalid_argument(
+                                            "throughput_intra_tti_update must "
+                                            "be none or allocation_unit");
+                                }
 
                                 // LOG DATA CONFIG
                                 if (key == "log_freq")
@@ -372,6 +481,19 @@ void configuration_loader::load(std::string cfg_file)
                                     max_rtx_ul = std::stoi(value);
                                 if (key == "max_rtx_dl")
                                     max_rtx_dl = std::stoi(value);
+                                if (key == "harq_model")
+                                {
+                                    if (value == "legacy_bler")
+                                        harq_model_value =
+                                            harq_model::legacy_bler;
+                                    else if (value == "disabled")
+                                        harq_model_value =
+                                            harq_model::disabled;
+                                    else
+                                        throw std::invalid_argument(
+                                            "harq_model must be legacy_bler "
+                                            "or disabled");
+                                }
                                 if (key == "mcs_tables")
                                 {
                                     if (value == "true" || value == "1")
@@ -395,6 +517,27 @@ void configuration_loader::load(std::string cfg_file)
                                     transition_c = std::stoi(value);
                                 if (key == "ratio_DL_UL")
                                     ratio_DL_UL = std::stof(value);
+                            }
+                            if (mode == "Control")
+                            {
+                                if (key == "enabled")
+                                {
+                                    if (value == "true" || value == "1") control_c.enabled = true;
+                                    else if (value == "false" || value == "0") control_c.enabled = false;
+                                    else throw std::invalid_argument(
+                                        "[Control] enabled must be true or false");
+                                }
+                                if (key == "transport") control_c.transport = value;
+                                if (key == "address") control_c.address = value;
+                                if (key == "port") control_c.port = std::stoi(value);
+                                if (key == "sync_mode") control_c.sync_mode = value;
+                                if (key == "credit_timeout_ms") control_c.credit_timeout_ms = std::stoi(value);
+                                if (key == "on_timeout") control_c.on_timeout = value;
+                                if (key == "on_peer_loss") control_c.on_peer_loss = value;
+                                if (key == "timeline_file") control_c.timeline_file = value;
+                                if (key == "journal_file") control_c.journal_file = value;
+                                if (key == "max_cmds_per_tick") control_c.max_cmds_per_tick = std::stoi(value);
+                                if (key == "max_object_events") control_c.max_object_events = std::stoi(value);
                             }
                             if (mode == "Monitoring")
                             {
@@ -439,6 +582,11 @@ void configuration_loader::load(std::string cfg_file)
                                 {
                                     if (value == "true" || value == "1") monitoring_c.emit_emulator_runtime = true;
                                     if (value == "false" || value == "0") monitoring_c.emit_emulator_runtime = false;
+                                }
+                                if (key == "emit_control")
+                                {
+                                    if (value == "true" || value == "1") monitoring_c.emit_control = true;
+                                    if (value == "false" || value == "0") monitoring_c.emit_control = false;
                                 }
                                 if (key == "emit_runtime_debug_logs")
                                 {
@@ -522,25 +670,25 @@ void configuration_loader::load(std::string cfg_file)
                                 if (key == "ut_noise_figure")
                                     ut_noise_figure = std::stoi(value);
                                 if (key == "air_delay_var_ul")
-                                    air_delay_var_ul = random_v ? std::stof(value) : 0;
+                                    air_delay_var_ul = std::stof(value);
                                 if (key == "rtx_period_ul")
                                     rtx_period_ul = std::stof(value);
                                 if (key == "rtx_period_var_ul")
-                                    rtx_period_var_ul = random_v ? std::stof(value) : 0;
+                                    rtx_period_var_ul = std::stof(value);
                                 if (key == "rtx_proc_delay_ul")
                                     rtx_proc_delay_ul = std::stof(value);
                                 if (key == "rtx_proc_delay_var_ul")
-                                    rtx_proc_delay_var_ul = random_v ? std::stof(value) : 0;
+                                    rtx_proc_delay_var_ul = std::stof(value);
                                 if (key == "air_delay_var_dl")
-                                    air_delay_var_dl = random_v ? std::stof(value) : 0;
+                                    air_delay_var_dl = std::stof(value);
                                 if (key == "rtx_period_dl")
                                     rtx_period_dl = std::stof(value);
                                 if (key == "rtx_period_var_dl")
-                                    rtx_period_var_dl = random_v ? std::stof(value) : 0;
+                                    rtx_period_var_dl = std::stof(value);
                                 if (key == "rtx_proc_delay_dl")
                                     rtx_proc_delay_dl = std::stof(value);
                                 if (key == "rtx_proc_delay_var_dl")
-                                    rtx_proc_delay_var_dl = random_v ? std::stof(value) : 0;
+                                    rtx_proc_delay_var_dl = std::stof(value);
                             }
                             LOG_INFO_I("configuration_loader::load") << " Configuration - " << key << " = " << value << " added." << END();
                         }
@@ -562,11 +710,120 @@ void configuration_loader::load(std::string cfg_file)
     {
         LOG_WARNING_I("configuration_loader::load") << "File doesn't exit...falling back to defaults" << END();
     }
+
+    // Resolve the map only after all sections have been parsed. This removes the
+    // historical dependency on Scenario appearing before eNBConfig.
+    if (!map_file_explicit)
+        map_file = getClosestMapFile(scenario_type, frequency);
+    else
+        LOG_INFO_I("configuration_loader::load")
+            << "Selected explicit map " << map_file << END();
+    if (map_file.empty())
+        throw std::invalid_argument(
+            "no map is available for the configured scenario and frequency");
+
+    // Once the whole file has been read, so that run_id decides the name no matter
+    // where it appears in it.
+    for (ue_full_config &ue_c : ue_c_list)
+        ue_c.ue_c.log_id = get_unique_id();
+
+    std::set<int> captured_queues;
+    for (const ue_full_config &ue : ue_c_list)
+    {
+        if (ue.ue_type != REAL_UE)
+            continue;
+        const int ul_queue = ue.ue_c.ul_queue_n;
+        const int dl_queue = ue.ue_c.dl_queue_n;
+        const std::string label = ue.id.empty() ? "<unnamed>" : ue.id;
+        if (ul_queue < 0 || dl_queue < 0)
+            throw std::invalid_argument(
+                "captured UE " + label + " has a negative NFQUEUE id");
+        if (ul_queue == dl_queue)
+            throw std::invalid_argument(
+                "captured UE " + label
+                + " must use different UL and DL NFQUEUE ids");
+        if (!captured_queues.insert(ul_queue).second)
+            throw std::invalid_argument(
+                "captured UE " + label + " reuses NFQUEUE "
+                + std::to_string(ul_queue));
+        if (!captured_queues.insert(dl_queue).second)
+            throw std::invalid_argument(
+                "captured UE " + label + " reuses NFQUEUE "
+                + std::to_string(dl_queue));
+    }
+
+    const bool uses_throughput_history =
+        metric_type == METRIC_PF || metric_type == METRIC_BET;
+    if (metric_type != METRIC_PF && pf_alpha_configured)
+        throw std::invalid_argument(
+            "pf_alpha is only valid for metric_type: 6 (PF)");
+    if (uses_throughput_history)
+    {
+        if (throughput_time_window_ms <= 0.0f)
+            throw std::invalid_argument(
+                "PF and BET require throughput_time_window_ms > 0");
+        if (metric_type == METRIC_PF && pf_alpha < 0.0f)
+            throw std::invalid_argument("PF requires pf_alpha >= 0");
+        for (const ue_full_config &ue_c : ue_c_list)
+        {
+            if (ue_c.ue_c.beta_metric_configured)
+                throw std::invalid_argument(
+                    "beta_metric is not valid for PF or BET; use "
+                    "throughput_time_window_ms and keep UE priority as the "
+                    "per-UE weight");
+        }
+    }
+    else
+    {
+        if (throughput_intra_tti_update)
+            throw std::invalid_argument(
+                "throughput_intra_tti_update: allocation_unit is only valid "
+                "for PF and BET");
+        for (const ue_full_config &ue_c : ue_c_list)
+        {
+            if (ue_c.ue_c.beta_metric_configured)
+                LOG_WARNING_I("configuration_loader::load")
+                    << "beta_metric is ignored by metric_type "
+                    << metric_type << END();
+        }
+    }
+
+    const auto require_nonnegative_finite =
+        [](const char *name, float value) {
+            if (!std::isfinite(value) || value < 0.0f)
+                throw std::invalid_argument(
+                    std::string(name)
+                    + " must be finite and non-negative seconds");
+        };
+    if (max_rtx_ul < 0 || max_rtx_dl < 0)
+        throw std::invalid_argument("max_rtx_ul and max_rtx_dl must be >= 0");
+    require_nonnegative_finite("backhaul_d", backhaul_d);
+    require_nonnegative_finite("backhaul_d_var", backhaul_d_var);
+    require_nonnegative_finite("air_delay_var_ul", air_delay_var_ul);
+    require_nonnegative_finite("rtx_period_ul", rtx_period_ul);
+    require_nonnegative_finite("rtx_period_var_ul", rtx_period_var_ul);
+    require_nonnegative_finite("rtx_proc_delay_ul", rtx_proc_delay_ul);
+    require_nonnegative_finite(
+        "rtx_proc_delay_var_ul", rtx_proc_delay_var_ul);
+    require_nonnegative_finite("air_delay_var_dl", air_delay_var_dl);
+    require_nonnegative_finite("rtx_period_dl", rtx_period_dl);
+    require_nonnegative_finite("rtx_period_var_dl", rtx_period_var_dl);
+    require_nonnegative_finite("rtx_proc_delay_dl", rtx_proc_delay_dl);
+    require_nonnegative_finite(
+        "rtx_proc_delay_var_dl", rtx_proc_delay_var_dl);
+    if (harq_model_value == harq_model::legacy_bler && !mcs_tables)
+        throw std::invalid_argument(
+            "harq_model: legacy_bler requires mcs_tables: true");
 }
 
 float configuration_loader::get_period()
 {
     return period;
+}
+
+std::uint64_t configuration_loader::get_seed()
+{
+    return seed;
 }
 
 float configuration_loader::get_duration()
@@ -589,17 +846,39 @@ phy_enb_config configuration_loader::get_phy_enb_config()
     return phy_enb_config(tx_power, modulation_m, target_ber,
                           cqi_mode, frequency, bandwidth, mimo_layers,
                           metric_type, interference_ues, interference_eNBs, distance_interference, interfered_bandwidth_ratio,
-                          thermal_noise, enb_noise_figure, ut_noise_figure, eNB_gain, UT_gain, power_boost, numerology);
+                          thermal_noise, enb_noise_figure, ut_noise_figure, eNB_gain, UT_gain, power_boost, numerology,
+                          pf_alpha, throughput_time_window_ms,
+                          throughput_intra_tti_update);
 }
 
 pdcp_config configuration_loader::get_pdcp_config_ul()
 {
-    return pdcp_config(max_rtx_ul, air_delay_var_ul, rtx_period_ul, rtx_period_var_ul, rtx_proc_delay_ul, rtx_proc_delay_ul, backhaul_d, backhaul_d_var, order_pkts);
+    return pdcp_config(
+        max_rtx_ul,
+        air_delay_var_ul,
+        rtx_period_ul,
+        rtx_period_var_ul,
+        rtx_proc_delay_ul,
+        rtx_proc_delay_var_ul,
+        backhaul_d,
+        backhaul_d_var,
+        order_pkts,
+        harq_model_value);
 }
 
 pdcp_config configuration_loader::get_pdcp_config_dl()
 {
-    return pdcp_config(max_rtx_dl, air_delay_var_dl, rtx_period_dl, rtx_period_var_dl, rtx_proc_delay_dl, rtx_proc_delay_dl, backhaul_d, backhaul_d_var, order_pkts);
+    return pdcp_config(
+        max_rtx_dl,
+        air_delay_var_dl,
+        rtx_period_dl,
+        rtx_period_var_dl,
+        rtx_proc_delay_dl,
+        rtx_proc_delay_var_dl,
+        backhaul_d,
+        backhaul_d_var,
+        order_pkts,
+        harq_model_value);
 }
 
 enb_config configuration_loader::get_enb_config()
@@ -629,9 +908,19 @@ bool configuration_loader::get_threading()
 
 mac_config configuration_loader::get_mac_config()
 {
+    if (
+        duplexing_type == FDD
+        && std::fabs(ratio_DL_UL - 0.5f) > 1e-6f)
+    {
+        throw std::invalid_argument(
+            "asymmetric FDD bandwidth is not supported; "
+            "use ratio_DL_UL: 0.5 or TDD");
+    }
     return mac_config(mimo_layers, numerology, n_re_freq, n_ofdm_syms, bandwidth, scheduling_mode,
                       scheduling_type, scheduling_config, metric_type,
-                      duplexing_type, ratio_DL_UL);
+                      duplexing_type, ratio_DL_UL, pf_alpha,
+                      throughput_time_window_ms,
+                      throughput_intra_tti_update);
 }
 
 tdd_config configuration_loader::get_tdd_config()
@@ -641,13 +930,16 @@ tdd_config configuration_loader::get_tdd_config()
 
 std::string configuration_loader::get_unique_id()
 {
+    // Stored on first use: the UE logs and the MAC logs ask for it at different
+    // moments, and a fresh timestamp each time would split one run across two
+    // directories whenever the calls fall either side of a second.
     if (unique_id == "")
     {
         time_t now = std::time(0);
         tm *ltm = std::localtime(&now);
         std::ostringstream oss;
         oss << std::put_time(ltm, "%Y_%m_%d_%H_%M_%S");
-        return oss.str();
+        unique_id = oss.str();
     }
 
     return unique_id;
@@ -687,12 +979,14 @@ float configuration_loader::get_freq()
 
 std::string configuration_loader::getClosestMapFile(int scenario_type, double frequency)
 {
+    constexpr double frequency_tolerance_ghz = 1e-4;
     double freqGHz = frequency / 1e9;
 
     auto scenarioIt = SCENARIO_TYPE_MAP.find(scenario_type);
     if (scenarioIt == SCENARIO_TYPE_MAP.end())
     {
-        std::cerr << "Unknown scenario_type: " << scenario_type << std::endl;
+        LOG_ERROR_I("configuration_loader::getClosestMapFile")
+            << "Unknown scenario_type: " << scenario_type << END();
         return "";
     }
 
@@ -701,7 +995,8 @@ std::string configuration_loader::getClosestMapFile(int scenario_type, double fr
     auto freqIt = AVAILABLE_FREQUENCIES.find(scenarioName);
     if (freqIt == AVAILABLE_FREQUENCIES.end())
     {
-        std::cerr << "No frequencies available for scenario: " << scenarioName << std::endl;
+        LOG_ERROR_I("configuration_loader::getClosestMapFile")
+            << "No frequencies available for scenario: " << scenarioName << END();
         return "";
     }
 
@@ -728,8 +1023,20 @@ std::string configuration_loader::getClosestMapFile(int scenario_type, double fr
     }
 
     std::string mapFilePath = getBaseMapPath() + scenarioName + "_" + freqStr + ".json";
-
-    std::cout << "Generated map file path: " << mapFilePath << std::endl;
+    if (std::abs(closestFreq - freqGHz) > frequency_tolerance_ghz)
+    {
+        if (!allow_nearest_map_fallback)
+        {
+            throw std::invalid_argument(
+                "no exact map for requested scenario/frequency; "
+                "set allow_nearest_map_fallback: true or map_file explicitly");
+        }
+        LOG_WARNING_I("configuration_loader::getClosestMapFile")
+            << "Requested " << freqGHz << " GHz for " << scenarioName
+            << "; selected nearest map at " << closestFreq << " GHz" << END();
+    }
+    LOG_INFO_I("configuration_loader::getClosestMapFile")
+        << "Selected map " << mapFilePath << END();
 
     return mapFilePath;
 }
@@ -737,4 +1044,9 @@ std::string configuration_loader::getClosestMapFile(int scenario_type, double fr
 monitoring_config configuration_loader::get_monitoring_config()
 {
     return monitoring_c;
+}
+
+control_config configuration_loader::get_control_config()
+{
+    return control_c;
 }

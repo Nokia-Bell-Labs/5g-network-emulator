@@ -1,0 +1,23 @@
+{
+  "artifacts": [
+    {
+      "path": "docs/baselines/scheduler-family-v2/results.csv",
+      "sha256": "dd7a2b45277c6457d82a957839f8a7f9baebc5df1957ce88bff5603324bf975a"
+    },
+    {
+      "path": "docs/baselines/scheduler-family-v2/report.md",
+      "sha256": "92939258da73a51963ca9f6537698c1873474c9c56b43fdc6eb9789c75c0d24e"
+    },
+    {
+      "path": "docs/baselines/scheduler-family-v2/metadata.json",
+      "sha256": "dc024e033e8d6d97b4212787ea0eec27ab8174d88e73ec6904f1f782eeb4e894"
+    },
+    {
+      "path": "docs/baselines/scheduler-family-v2/failures.csv",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "raw_runtime_samples_committed": false,
+  "schema_version": 1,
+  "source_sha": "a849796d8ba83ba0d481a2d0f2c572cc5f4e7527"
+}

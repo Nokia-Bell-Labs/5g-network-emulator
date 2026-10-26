@@ -56,24 +56,23 @@ bool dualpi2_queue::pop_next(ip_pkt& pkt)
     {
         bool from_l4s = choose_l4s();
         std::deque<ip_pkt>& q = from_l4s ? l_queue : c_queue;
-        float& q_bits = from_l4s ? l_bits : c_bits;
+        std::uint64_t& q_bits = from_l4s ? l_bits : c_bits;
 
         if(q.empty())
         {
             from_l4s = !from_l4s;
             std::deque<ip_pkt>& other_q = from_l4s ? l_queue : c_queue;
-            float& other_bits = from_l4s ? l_bits : c_bits;
+            std::uint64_t& other_bits = from_l4s ? l_bits : c_bits;
             pkt = std::move(other_q.front());
             other_q.pop_front();
-            other_bits -= pkt.size;
-            if(other_bits < 0.0f) other_bits = 0.0f;
+            other_bits =
+                pkt.size <= other_bits ? other_bits - pkt.size : 0;
         }
         else
         {
             pkt = std::move(q.front());
             q.pop_front();
-            q_bits -= pkt.size;
-            if(q_bits < 0.0f) q_bits = 0.0f;
+            q_bits = pkt.size <= q_bits ? q_bits - pkt.size : 0;
         }
 
         if(is_l4s(pkt))
@@ -131,11 +130,10 @@ bool dualpi2_queue::pop_oldest(ip_pkt& pkt)
 
     bool take_l = c_head == nullptr || (l_head != nullptr && l_head->current_t <= c_head->current_t);
     std::deque<ip_pkt>& q = take_l ? l_queue : c_queue;
-    float& q_bits = take_l ? l_bits : c_bits;
+    std::uint64_t& q_bits = take_l ? l_bits : c_bits;
     pkt = std::move(q.front());
     q.pop_front();
-    q_bits -= pkt.size;
-    if(q_bits < 0.0f) q_bits = 0.0f;
+    q_bits = pkt.size <= q_bits ? q_bits - pkt.size : 0;
     update_snapshot();
     return true;
 }
@@ -167,8 +165,8 @@ void dualpi2_queue::clear()
     l_queue.clear();
     c_queue.clear();
     dropped_queue.clear();
-    l_bits = 0.0f;
-    c_bits = 0.0f;
+    l_bits = 0;
+    c_bits = 0;
     update_snapshot();
 }
 
@@ -201,9 +199,9 @@ dualpi2_stats dualpi2_queue::get_interval_stats()
     stats.p_c = p_c;
     stats.p_cl = p_cl;
     interval_stats.ce_packets = 0;
-    interval_stats.ce_bits = 0.0f;
+    interval_stats.ce_bits = 0;
     interval_stats.aqm_drops = 0;
-    interval_stats.aqm_drop_bits = 0.0f;
+    interval_stats.aqm_drop_bits = 0;
     return stats;
 }
 

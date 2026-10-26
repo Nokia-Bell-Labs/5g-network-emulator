@@ -5,6 +5,7 @@
  **********************************************/
 
 #include <mac_layer/resource_grid.h>
+#include <stdexcept>
 #include <vector>
 
 // Checks if a valid duplexing type (TDD or FDD) was selected
@@ -58,13 +59,14 @@ int grid::check_numerology(int n)
     return n;
 }
 
-// Checks if any valid configuration is possible with the available bandwidth. Exits the program otherwise
+// Checks if any valid configuration is possible with the available bandwidth.
+// Throwing lets main report a stable EX_SOFTWARE-style status and still run destructors;
+// exit(-1) bypassed both and surfaced as the opaque status 255 on Unix.
 void grid::check_frequency_division(int n)
 {
     if (n < SCH_N_RB_MIN)
     {
-        LOG_ERROR_I("grid::check_frequency_division") << " Not enough bandwidth for selected numerology, exiting . . . " << END();
-        exit(-1);
+        throw std::runtime_error("not enough bandwidth for selected numerology");
     }
 }
 
@@ -125,14 +127,31 @@ void grid::init(std::vector<ue> *ue_list)
 void grid::step()
 {
     int syms = 0;
+    int n_enabled = 0;
     last_step_metrics = grid_step_metrics();
-    last_step_metrics.grid_capacity_bits = max_capacity_bits;
     if (ue_list != nullptr)
     {
         for (std::vector<ue>::iterator it = ue_list->begin(); it != ue_list->end(); ++it)
         {
-            if (it->has_packets(tx))
+            if (it->is_enabled())
+                n_enabled++;
+            if (it->is_enabled() && it->has_packets(tx))
                 last_step_metrics.active_ues_with_data++;
+            bool scheduler_active =
+                it->is_enabled() && it->has_packets(tx);
+            if (scheduler_active)
+            {
+                scheduler_active = false;
+                for (int f = 0; f < n_freq_rbg; f++)
+                {
+                    if (it->get_tp(tx, f) > 0.0f)
+                    {
+                        scheduler_active = true;
+                        break;
+                    }
+                }
+            }
+            it->prepare_scheduler_tti(tx, scheduler_active);
         }
     }
     std::vector<bool> scheduled_ues(ue_list != nullptr ? ue_list->size() : 0, false);
@@ -142,15 +161,25 @@ void grid::step()
             syms = tdd_h.get_syms();
         else
             syms = n_sym_rbg;
-        for (int f = 0; f < n_freq_rbg; f++)
+        if (syms > 0)
         {
-            rb_grid[t][f].estimate_params(syms, current_t);
-            rb_grid[t][f].handle_packet(syms);
+            last_step_metrics.available_rbg_count += n_freq_rbg;
+            last_step_metrics.grid_capacity_bits +=
+                n_freq_rbg
+                * n_sc_rbg
+                * syms
+                * EFF_2_CQI[1][15];
+        }
+
+        auto record_rbg = [&](int f)
+        {
             if (rb_grid[t][f].was_scheduled())
             {
                 last_step_metrics.scheduled_rbg_count++;
                 last_step_metrics.scheduled_bits += rb_grid[t][f].last_scheduled_bits();
                 last_step_metrics.effective_bits += rb_grid[t][f].last_effective_bits();
+                if (rb_grid[t][f].last_effective_bits() > 0.0f)
+                    last_step_metrics.effective_rbg_count++;
                 int ue_index = rb_grid[t][f].last_ue_index();
                 if (ue_index >= 0 && ue_index < (int)scheduled_ues.size() && !scheduled_ues[ue_index])
                 {
@@ -158,13 +187,84 @@ void grid::step()
                     last_step_metrics.scheduled_ue_count++;
                 }
             }
+        };
+
+        if (tx == TX_UL)
+        {
+            // UL power is a per-UE total-power budget. Plan the complete frequency
+            // allocation for this time group before deriving per-PRB power and MCS.
+            for (int f = 0; f < n_freq_rbg; f++)
+            {
+                rb_grid[t][f].estimate_params(syms, current_t, n_enabled);
+                const int ue_index = rb_grid[t][f].planned_ue_index();
+                if (ue_index >= 0)
+                    (*ue_list)[ue_index].record_provisional_scheduler_service(
+                        tx, rb_grid[t][f].planned_scheduled_bits(syms));
+            }
+
+            std::vector<int> allocated_prbs(
+                ue_list != nullptr ? ue_list->size() : 0, 0);
+            for (int f = 0; f < n_freq_rbg; f++)
+            {
+                const int ue_index = rb_grid[t][f].planned_ue_index();
+                if (ue_index >= 0 && ue_index < (int)allocated_prbs.size())
+                    allocated_prbs[ue_index] += n_freq_rb_rbg;
+            }
+            for (size_t ue_index = 0; ue_index < allocated_prbs.size(); ue_index++)
+                (*ue_list)[ue_index].finalize_ul_allocation(allocated_prbs[ue_index]);
+
+            for (int f = 0; f < n_freq_rbg; f++)
+            {
+                rb_grid[t][f].handle_packet(syms);
+                record_rbg(f);
+            }
+        }
+        else
+        {
+            for (int f = 0; f < n_freq_rbg; f++)
+            {
+                rb_grid[t][f].estimate_params(syms, current_t, n_enabled);
+                const int ue_index = rb_grid[t][f].planned_ue_index();
+                if (ue_index >= 0)
+                    (*ue_list)[ue_index].record_provisional_scheduler_service(
+                        tx, rb_grid[t][f].planned_scheduled_bits(syms));
+                rb_grid[t][f].handle_packet(syms);
+                record_rbg(f);
+            }
         }
     }
-    last_step_metrics.empty_rbg_count = n_freq_rbg * n_time_rbg - last_step_metrics.scheduled_rbg_count;
-    if (n_freq_rbg * n_time_rbg > 0)
-        last_step_metrics.utilization_ratio = (float)last_step_metrics.scheduled_rbg_count / (float)(n_freq_rbg * n_time_rbg);
+    const int total_rbg_count = n_freq_rbg * n_time_rbg;
+    last_step_metrics.structural_unavailable_rbg_count =
+        total_rbg_count - last_step_metrics.available_rbg_count;
+    last_step_metrics.empty_rbg_count =
+        last_step_metrics.available_rbg_count
+        - last_step_metrics.scheduled_rbg_count;
+    last_step_metrics.zero_effective_rbg_count =
+        last_step_metrics.scheduled_rbg_count
+        - last_step_metrics.effective_rbg_count;
+    if (last_step_metrics.available_rbg_count > 0)
+        last_step_metrics.utilization_ratio =
+            (float)last_step_metrics.scheduled_rbg_count
+            / (float)last_step_metrics.available_rbg_count;
     if (last_step_metrics.scheduled_bits > 0.0f)
         last_step_metrics.scheduling_efficiency_ratio = last_step_metrics.effective_bits / last_step_metrics.scheduled_bits;
+    if (log)
+    {
+        logger->log_force(
+            "summary:1 tx:{} available:{} assigned:{} effective:{} "
+            "wasted:{} empty:{} structural:{} capacity:{} "
+            "utilization:{} ts:{} \n",
+            tx,
+            last_step_metrics.available_rbg_count,
+            last_step_metrics.scheduled_rbg_count,
+            last_step_metrics.effective_rbg_count,
+            last_step_metrics.zero_effective_rbg_count,
+            last_step_metrics.empty_rbg_count,
+            last_step_metrics.structural_unavailable_rbg_count,
+            last_step_metrics.grid_capacity_bits,
+            last_step_metrics.utilization_ratio,
+            current_t);
+    }
 }
 
 float grid::assignRFBandwidth(float bandwidth)
@@ -293,5 +393,4 @@ grid::grid(int _tx, int _mimo_layers, int _numerology, int _n_re_f, int _n_re_t,
     n_logical_units = n_time_rb / n_time_rbg;
     metric_t = _metric_t;
     tdd_h.set_syms(n_sym_rbg);
-    max_capacity_bits = n_rb_total * n_ofdm_symbols * n_sc_rb * EFF_2_CQI[1][15];
 }

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "scenario": "../../config/control_demo.ini",
+  "run": {
+    "duration_s": 10,
+    "interval_s": 1,
+    "drain_timeout_s": 5
+  },
+  "transport": {
+    "protocol": "tcp",
+    "direction": "dl",
+    "parallel_per_ue": 2,
+    "mss": 1500,
+    "rwnd_bytes": 262144,
+    "congestion": "cubic",
+    "ack_over_link": false
+  },
+  "ues": [
+    "controlDemo_0"
+  ],
+  "emulator_overrides": {
+    "MACLayer.metric_type": "6",
+    "UE:controlDemo.pkt_delay_budget": "0.020"
+  }
+}

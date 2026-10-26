@@ -11,6 +11,7 @@
 
 #include <random>
 #include <assert.h>
+#include <utils/rng_seed.h>
 #include <memory>
 #include <common/direction.h>
 #include <utils/conversions.h>
@@ -34,7 +35,7 @@ public:
                         float _var_perc,
                         int _pkt_size, 
                         bool _random_v)
-    :uniform_gen(time(NULL)*_random_v + id)
+    :uniform_gen(rng_seed(_random_v, RNG_TRAFFIC, (std::uint64_t)id))
     {
         ul_target = _ul_target; 
         dl_target = _dl_target; 
@@ -80,6 +81,20 @@ public:
     int get_pkt_size(int tx)
     {
         return pkt_size;
+    }
+
+    // Runtime control setter. Target rate in bits per second, the internal unit; the Mbps
+    // of the .ini and of the control channel are converted by the caller.
+    virtual void set_target(int tx, float bps)
+    {
+        assert(tx == T_DL || tx == T_UL);
+        if(tx == T_DL) dl_target = bps;
+        else ul_target = bps;
+    }
+
+    virtual float get_target(int tx) const
+    {
+        return tx == T_DL ? dl_target : ul_target;
     }
 protected: 
     float ul_target; 

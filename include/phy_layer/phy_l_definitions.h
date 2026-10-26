@@ -7,7 +7,9 @@
 #ifndef PHY_L_DEFINITIONS
 #define PHY_L_DEFINITIONS
 
+#include <algorithm>
 #include <math.h>
+#include <stdexcept>
 #include <vector>
 #include <common/direction.h>
 
@@ -36,6 +38,15 @@ static const std::vector<float> RI_THRES_DEFAULT{-20, 15};
 #define OUTDOOR 10
 #define IN_BUILDING 11
 #define IN_CAR 12
+#define LOCATION_RANDOM 13
+
+#define PENETRATION_LEGACY_AUTO -1
+#define PENETRATION_NONE 0
+#define PENETRATION_LOW_LOSS 1
+#define PENETRATION_HIGH_LOSS 2
+
+#define VEHICLE_STANDARD 0
+#define VEHICLE_METALLIZED 1
 
 #define BC_CORRELATION_DEFAULT 5.0
 
@@ -54,6 +65,26 @@ static const float EFF_2_CQI[2][NUM_CQI_VALUES + 1] = {{0,0.1523,0.2344,0.3770,0
 
 #define NUM_RI_VALUES 4
 static const float RI_THRES[2][NUM_RI_VALUES-1] = {{4.87, 11.47, 22.82},{4.87, 7.87, 10.87}};
+
+inline int get_mcs_layer_index(int layers)
+{
+    return std::max(1, std::min(layers, NUM_RI_VALUES)) - 1;
+}
+
+inline int estimate_rank_from_mean_sinr(
+    int modulation_index,
+    int maximum_rank,
+    float mean_sinr_db)
+{
+    const int rank_limit =
+        std::max(1, std::min(maximum_rank, NUM_RI_VALUES));
+    for (int index = 0; index < rank_limit - 1; index++)
+    {
+        if (mean_sinr_db <= RI_THRES[modulation_index][index])
+            return index + 1;
+    }
+    return rank_limit;
+}
 
 #define NUM_MCS_VALUES 29
 static const float EFF_2_MCS[2][NUM_MCS_VALUES] = {{  0.2344,
@@ -132,20 +163,28 @@ static int get_rbg_sndex(int size)
     return 0;
 }
 
-#define F1_LIMIT 7000000000
+#define FR1_MAX_HZ 7125000000.0
+#define FR2_MIN_HZ 24250000000.0
 #define F2_DL 0.18
 #define F1_DL 0.14
 #define F2_UL 0.10
 #define F1_UL 0.08
 
-static float get_overhead(int f, int tx){
+static float get_overhead(double frequency_hz, int tx){
+    if (
+        frequency_hz > FR1_MAX_HZ
+        && frequency_hz < FR2_MIN_HZ)
+    {
+        throw std::invalid_argument(
+            "frequency lies in the unsupported FR1/FR2 gap");
+    }
     if(tx == TX_DL)
     {
-        if(f > F1_LIMIT) return F2_DL; 
+        if(frequency_hz >= FR2_MIN_HZ) return F2_DL;
         else return F1_DL;
     }
     else{
-        if(f > F1_LIMIT) return F2_UL;
+        if(frequency_hz >= FR2_MIN_HZ) return F2_UL;
         else return F1_UL; 
     }
 }

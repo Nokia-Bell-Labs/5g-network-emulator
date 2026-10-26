@@ -7,16 +7,30 @@ This report summarizes the full plot set generated for the latest offline FikoRE
 ### Downlink Throughput vs Time
 File: [mac/dl_throughput.png](mac/dl_throughput.png)
 
-Shows the downlink throughput over time for the scheduled UEs. When available, it also includes the modified Shannon limit as a rough capacity reference.
+Shows the downlink throughput over time for the scheduled UEs.
 
 ![Downlink Throughput vs Time](mac/dl_throughput.png)
 
-### CDF of Normalized UE Throughput
+### Uplink Throughput vs Time
+File: [mac/ul_throughput.png](mac/ul_throughput.png)
+
+Shows the uplink throughput over time for the scheduled UEs.
+
+![Uplink Throughput vs Time](mac/ul_throughput.png)
+
+### CDF of Normalized UE Throughput (Downlink)
 File: [mac/cdf_throughput.png](mac/cdf_throughput.png)
 
 Shows the cumulative distribution of average UE throughput. It is useful for checking fairness and throughput spread across users.
 
 ![CDF of Normalized UE Throughput](mac/cdf_throughput.png)
+
+### CDF of Normalized UE Throughput (Uplink)
+File: [mac/cdf_throughput_ul.png](mac/cdf_throughput_ul.png)
+
+The same distribution for the uplink.
+
+![CDF of Normalized UE Throughput, Uplink](mac/cdf_throughput_ul.png)
 
 ## UE Plots
 

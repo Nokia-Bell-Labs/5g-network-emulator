@@ -1,0 +1,26 @@
+# Example control plane script. One NDJSON line per message.
+# Used with transport: file and timeline_file in the [Control] section.
+#
+# at_tti is the canonical instant (1 TTI = 1 ms). at_t in seconds also works and is
+# converted on load; at_tti wins if both are given.
+
+# t=5 s: UE 0 moves to priority 8. With metric_type: 6 the effect is immediate.
+{"id":1,"at_t":5.0,"cmds":[{"target":"ue/0","set":{"priority":8.0}}]}
+
+# t=10 s: UE 0 is capped at 25 Mbps downlink and given 6 dB of fading.
+{"id":2,"at_t":10.0,"cmds":[{"target":"ue/0","set":{"dl.rmax_mbps":25.0,"dl.sinr_offset_db":-6.0}}]}
+
+# t=15 s: UE 1 is logically detached. It disappears from telemetry and drops its buffers.
+{"id":3,"at_t":15.0,"cmds":[{"target":"ue/1","set":{"enabled":false}}]}
+
+# t=20 s: it comes back, with empty buffers and at its last known position.
+{"id":4,"at_t":20.0,"cmds":[{"target":"ue/1","set":{"enabled":true}}]}
+
+# t=25 s: UE 0 is moved and set to 36 km/h. The units are the ones of the .ini.
+{"id":5,"at_t":25.0,"cmds":[{"target":"ue/0","set":{"mobility.pos_x_m":800.0,"mobility.speed_kmh":36.0}}]}
+
+# t=30 s: a client driven transfer. The delay budget goes up first, because with the
+# default 0.35 s most of the object would expire before reaching the air, and then 2 MB
+# are injected in one go.
+{"id":6,"at_t":30.0,"cmds":[{"target":"ue/0","set":{"pkt_delay_budget_s":10.0}}]}
+{"id":7,"at_t":30.001,"cmds":[{"target":"ue/0","set":{"dl.inject_bytes":2000000}}]}

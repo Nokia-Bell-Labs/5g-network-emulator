@@ -5,20 +5,30 @@
 **********************************************/
 
 #include <chrono>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 #include <utility>
 
 #include <pdcp_layer/captured_packet_handler.h>
 #include <pdcp_layer/packet_handler.h>
 #include <pdcp_layer/simulated_packet_handler.h>
+#include <utils/rng_seed.h>
 #include <simulator/configuration_loader.h>
 #include <utils/conversions.h>
 
-packet_handler::packet_handler(pdcp_config pdcp_c, int _verbosity)
-    : gauss_dist_gen(std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::system_clock::now().time_since_epoch()).count())
+packet_handler::packet_handler(pdcp_config pdcp_c, unsigned int seed, int _verbosity)
+    : gauss_dist_gen(seed)
 {
     bh_d = pdcp_c.bh_d;
     bh_d_var = pdcp_c.bh_d_var;
+    if (!std::isfinite(bh_d)
+        || !std::isfinite(bh_d_var)
+        || bh_d < 0.0f
+        || bh_d_var < 0.0f)
+        throw std::invalid_argument(
+            "backhaul delays must be finite and non-negative seconds");
     verbosity = _verbosity;
 }
 
@@ -64,19 +74,40 @@ void packet_handler::drop_ingress_pkt(ip_pkt pkt)
 
 void packet_handler::push(harq_pkt pkt)
 {
-    pkt.t_out += pkt.backhaul_d + gauss_dist(gauss_dist_gen)*pkt.backhaul_d_var;
+    if (pkt_list.size() >= max_release_blocks_)
+    {
+        record_error(pkt.bits, bit_fate::queue_dropped);
+        drop(std::move(pkt), bit_fate::queue_dropped);
+        return;
+    }
+    pkt.t_out += std::max(
+        0.0f,
+        pkt.backhaul_d
+            + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
     pkt_list.push_back(std::move(pkt));
+    release_high_water_ =
+        std::max(release_high_water_, pkt_list.size());
 }
 
-void packet_handler::drop(harq_pkt pkt)
+void packet_handler::drop(harq_pkt pkt, bit_fate fate)
 {
     (void)pkt;
+    (void)fate;
+}
+
+void packet_handler::flush_released()
+{
+    for(std::deque<harq_pkt>::const_iterator it = pkt_list.begin(); it != pkt_list.end(); ++it)
+    {
+        record_error(it->bits, bit_fate::queue_dropped);
+    }
+    pkt_list.clear();
 }
 
 float packet_handler::release()
 {
     int count = 0;
-    float bits = 0;
+    std::uint64_t bits = 0;
     float latency = 0;
     float ip_latency = 0;
     for(std::deque<harq_pkt>::iterator it=pkt_list.begin(); it!=pkt_list.end();)
@@ -109,6 +140,8 @@ float packet_handler::release()
 void packet_handler::fill_queue_status(pdcp_queue_status& status, float current_t) const
 {
     status.release_size = (int)pkt_list.size();
+    status.release_high_water =
+        static_cast<int>(release_high_water_);
     if(!pkt_list.empty())
     {
         const harq_pkt &pkt = pkt_list.front();
@@ -118,6 +151,30 @@ void packet_handler::fill_queue_status(pdcp_queue_status& status, float current_
     status.final_accept_packets = final_accept_packets_interval;
     status.final_accept_ce_packets = final_accept_ce_packets_interval;
     status.final_drop_packets = final_drop_packets_interval;
+}
+
+std::uint64_t packet_handler::pending_ingress_bits() const
+{
+    std::uint64_t bits = 0;
+    for (const ip_pkt &pkt : ingress_pkts)
+    {
+        if (pkt.size > std::numeric_limits<std::uint64_t>::max() - bits)
+            throw std::overflow_error("pending ingress bit count overflow");
+        bits += pkt.size;
+    }
+    return bits;
+}
+
+std::uint64_t packet_handler::pending_release_bits() const
+{
+    std::uint64_t bits = 0;
+    for (const harq_pkt &pkt : pkt_list)
+    {
+        if (pkt.bits > std::numeric_limits<std::uint64_t>::max() - bits)
+            throw std::overflow_error("pending release bit count overflow");
+        bits += pkt.bits;
+    }
+    return bits;
 }
 
 float packet_handler::get_generated(bool partial)
@@ -152,18 +209,37 @@ float packet_handler::get_tp(bool elapsed)
     else return BIT2MBIT*tp_mean.get()*S2MS;
 }
 
-void packet_handler::record_error(float bits)
+void packet_handler::record_error(std::uint64_t bits, bit_fate fate)
 {
     if(verbosity > 0) e_mean.add(bits);
+    switch(fate)
+    {
+        case bit_fate::expired:        expired_bits_total_ += bits; break;
+        case bit_fate::queue_dropped:  queue_dropped_bits_total_ += bits; break;
+        case bit_fate::radio_dropped:  radio_dropped_bits_total_ += bits; break;
+        case bit_fate::delivered:      break;
+    }
 }
 
 void packet_handler::push_ingress_pkt(ip_pkt pkt)
 {
+    record_admitted_bits(pkt.size);
     if(verbosity > 0) g_mean.add(pkt.size);
     ingress_pkts.push_back(std::move(pkt));
 }
 
-void packet_handler::verdict(const ip_pkt&, final_packet_verdict verdict_value)
+void packet_handler::record_admitted_bits(std::uint64_t bits)
+{
+    if (bits
+        > std::numeric_limits<std::uint64_t>::max()
+            - admitted_bits_total_)
+        throw std::overflow_error("admitted packet bit count overflow");
+    admitted_bits_total_ += bits;
+}
+
+bool packet_handler::verdict(
+    const ip_pkt&,
+    final_packet_verdict verdict_value)
 {
     switch(verdict_value)
     {
@@ -172,22 +248,26 @@ void packet_handler::verdict(const ip_pkt&, final_packet_verdict verdict_value)
         break;
     case final_packet_verdict::ACCEPT_CE:
         final_accept_ce_packets_interval++;
+        ce_packets_total_++;
         break;
     case final_packet_verdict::DROP:
         final_drop_packets_interval++;
         break;
     }
+    return true;
 }
 
 std::unique_ptr<packet_handler> make_packet_handler(packet_handler_config cfg)
 {
+    const unsigned int seed = pdcp_rng_seed(cfg.traffic_c.random_v, cfg.ue_id, cfg.tx_dir, PDCP_STREAM_PACKET_HANDLER);
+
     if(cfg.ue_type == SIM_UE)
     {
-        std::unique_ptr<packet_handler> handler(new simulated_packet_handler(cfg.ue_id, cfg.traffic_c, cfg.pdcp_c, cfg.log_traffic));
+        std::unique_ptr<packet_handler> handler(new simulated_packet_handler(cfg.ue_id, cfg.traffic_c, cfg.pdcp_c, seed, cfg.log_traffic));
         return handler;
     }
 
     assert(cfg.queue_num >= 0);
-    std::unique_ptr<packet_handler> handler(new captured_packet_handler(cfg.queue_num, cfg.init_t, cfg.pdcp_c, cfg.log_quality));
+    std::unique_ptr<packet_handler> handler(new captured_packet_handler(cfg.queue_num, cfg.init_t, cfg.pdcp_c, seed, cfg.log_quality));
     return handler;
 }

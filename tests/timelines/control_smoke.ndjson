@@ -1,0 +1,5 @@
+# Control plane smoke script. One NDJSON line per message.
+# at_tti is the canonical instant; at_t (seconds) is converted to TTI on load.
+{"id":1,"at_tti":10,"cmds":[{"target":"ue/0","set":{"priority":8.0}}]}
+{"id":2,"at_t":0.030,"cmds":[{"target":"ue/1","set":{"enabled":false}}]}
+{"id":3,"at_tti":40,"cmds":[{"target":"ue/1","set":{"enabled":true}}]}

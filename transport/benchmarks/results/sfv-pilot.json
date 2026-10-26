@@ -1,0 +1,65 @@
+{
+  "artifact_kind": "curated_summary",
+  "source_runner": "transport/benchmarks/validate_sfv.py",
+  "regeneration_command": "Run validate_sfv.py for the parity, five-second and cancellation configurations, then review and aggregate their manifests into this summary.",
+  "fikore_revision": "b064e2a52c0b925820bf14e3e26a6d28e6afeca8",
+  "sfv_core_revision": "07fab254952422d0092f80bf2490ea2a7fcfb9cb",
+  "sfv_vqeg_revision": "9d7d6f96f2017d321a181b5e4382642d6f9ef7c2",
+  "sfv_vqeg_version": "v0.7.2",
+  "mock_parity_0_2_s": {
+    "ue_0": {
+      "same_request_ids_sizes_and_states": true,
+      "mock_delivered_bytes": 471622,
+      "fikore_delivered_bytes": 471622,
+      "mock_wastage_bytes": 99808,
+      "fikore_wastage_bytes": 99808
+    },
+    "ue_1": {
+      "same_request_ids_sizes_and_states": true,
+      "mock_delivered_bytes": 317275,
+      "fikore_delivered_bytes": 317275,
+      "mock_wastage_bytes": 99808,
+      "fikore_wastage_bytes": 99547
+    }
+  },
+  "five_second_run": {
+    "wall_s": 0.912,
+    "network_steps": 501,
+    "submitted_bytes": 1095975,
+    "bytes_conserved": true,
+    "max_events_per_reply": 13,
+    "b1_requests": 10,
+    "b2_requests": 16,
+    "b1_future_media_before_swipe": 0,
+    "b2_future_media_before_swipe": [
+      "v2/0",
+      "v2/1",
+      "v3/0",
+      "v3/1"
+    ]
+  },
+  "cancellation_run_1_s_1_mbps_per_ue": {
+    "wall_s": 0.266,
+    "submitted_bytes": 319426,
+    "terminal_bytes": 248570,
+    "in_flight_bytes_at_cutoff": 70856,
+    "bytes_conserved": true,
+    "ue_0_cancelled_requests": 4,
+    "ue_1_cancelled_requests": 6,
+    "ue_0_tail_bytes": [
+      22500,
+      15000,
+      45000,
+      27000
+    ],
+    "ue_1_tail_bytes": [
+      19500,
+      15000,
+      45000,
+      30000,
+      0,
+      0
+    ],
+    "all_tails_nonnegative": true
+  }
+}

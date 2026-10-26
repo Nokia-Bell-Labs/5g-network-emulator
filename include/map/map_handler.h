@@ -36,6 +36,7 @@ private:
     float cellSize;
     int cellNumber;  
     float maxApothem;
+    int schemaVersion = 1;
 
    
 };

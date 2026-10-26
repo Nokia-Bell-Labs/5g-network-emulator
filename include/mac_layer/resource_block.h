@@ -51,10 +51,24 @@ private:
     void reset_metric();
     bool check_ue_assignment();
 public: 
-    void estimate_params(int syms, float current_t);
+    // n_enabled: how many UEs are enabled this TTI. The round robin wraps on it, so it
+    // has to be the same number for every RBG and every UE of the step.
+    void estimate_params(int syms, float current_t, int n_enabled);
     // Handle Packets
     float handle_packet(int syms);
     bool was_scheduled() const { return last_scheduled; }
+    int planned_ue_index() const
+    {
+        return max_metric.is_assigned() && max_metric.has_data()
+                   ? max_metric.get_index()
+                   : -1;
+    }
+    float planned_scheduled_bits(int syms) const
+    {
+        return planned_ue_index() >= 0
+                   ? max_metric.get_tp() * syms
+                   : 0.0f;
+    }
     int last_ue_index() const { return last_ue_index_v; }
     float last_scheduled_bits() const { return last_scheduled_bits_v; }
     float last_effective_bits() const { return last_effective_bits_v; }
@@ -65,6 +79,7 @@ private:
     int last_ue_index_v = -1;
     float last_scheduled_bits_v = 0.0f;
     float last_effective_bits_v = 0.0f;
+    int tie_cursor = 0;
 };
 
 #endif

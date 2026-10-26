@@ -1,0 +1,63 @@
+{
+  "channels": [
+    "homogeneous",
+    "near_far"
+  ],
+  "demands": [
+    "full_buffer",
+    "finite"
+  ],
+  "failed_cases": 0,
+  "grids": {
+    "100mhz_mu1": [
+      100000000,
+      1
+    ],
+    "20mhz_mu1": [
+      20000000,
+      1
+    ],
+    "400mhz_mu3": [
+      400000000,
+      3
+    ]
+  },
+  "host": {
+    "hostname": "pitahaya",
+    "platform": "Linux-5.15.0-58-generic-x86_64-with-glibc2.35",
+    "python": "3.10.4"
+  },
+  "modes": [
+    [
+      1,
+      0
+    ],
+    [
+      0,
+      1
+    ]
+  ],
+  "repeats": 3,
+  "schedulers": [
+    "bet",
+    "max_throughput",
+    "round_robin",
+    "pf"
+  ],
+  "schema_version": 1,
+  "selected_grids": [
+    "20mhz_mu1",
+    "100mhz_mu1",
+    "400mhz_mu3"
+  ],
+  "source_dirty": false,
+  "source_sha": "6770c645709517af5da8edf6ca9441f14c670374",
+  "steps": 100,
+  "timing_samples_per_case": 300,
+  "timing_unit": "individual warmed-up TTI",
+  "ue_counts": [
+    16,
+    64
+  ],
+  "warmup_steps": 20
+}

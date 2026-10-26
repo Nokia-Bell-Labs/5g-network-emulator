@@ -1,0 +1,34 @@
+{
+  "artifact_kind": "generated_result",
+  "bytes_conserved": true,
+  "delay_budget_s": 0.02,
+  "delivered_bytes": 2177160156,
+  "fikore_revision": "b064e2a52c0b925820bf14e3e26a6d28e6afeca8",
+  "goodput_mbps": 58.05760416,
+  "in_flight_bytes": 55500,
+  "kind": "loss",
+  "lost_bytes_by_cause": {
+    "budget": 39974272,
+    "queue": 0,
+    "radio": 0
+  },
+  "max_events_per_reply": 59,
+  "n_ues": 1,
+  "receive_window_bytes": 524288,
+  "reply_bytes": 439152572,
+  "regeneration_command": "PYTHONPATH=transport python3 transport/benchmarks/validate_scale.py --duration 300 --mode loss",
+  "simulated_s": 300.0,
+  "source_runner": "transport/benchmarks/validate_scale.py",
+  "slots": 300000,
+  "srtt_ms": 8.819806948339236,
+  "submitted_bytes": 2218808096,
+  "terminal_bytes": {
+    "delivered": 2178778324,
+    "dropped": 0,
+    "expired": 39974272
+  },
+  "transport_retransmits": 27790,
+  "transport_rto_events": 44,
+  "us_per_slot": 455.2353197631116,
+  "wall_s": 136.57059592893347
+}

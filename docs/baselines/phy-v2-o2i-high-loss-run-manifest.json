@@ -1,0 +1,30 @@
+{
+  "artifact_policy": "Portable rendered inputs and compact summaries are committed; raw logs remain local-only.",
+  "batch_id": "phy-v2-o2i-rebased-1b55ca1-seed20260927",
+  "duration_s": 180,
+  "environment": {
+    "hostname": "pitahaya",
+    "platform": "Linux-5.15.0-58-generic-x86_64-with-glibc2.35",
+    "python": "3.10.4"
+  },
+  "production_map_manifest_sha256": "0e3fe2f1b46584f786d2efa046bdd0bbbe8b17c1064d0fd239d971b96af269f1",
+  "runs": [
+    {
+      "elapsed_seconds": 9.105325479991734,
+      "map_file": "macroscopic_fading_map_URBAN_MICROCELL_26.json",
+      "map_realization_id": "urban_microcell-26-seed-4596863232196585428-8189c173b01e",
+      "map_sha256": "d548bc79e96c041c08bf03927370307b87702c8c49faffea4cdcff52243098e4",
+      "profile": "offline_umi_n258_fwa_high_loss",
+      "raw_logs_committed": false,
+      "rendered_config": "docs/baselines/phy-v2-o2i-inputs/offline_umi_n258_fwa_high_loss.ini",
+      "rendered_config_sha256": "f3a10695ecef114e7f415b65233aea85103d4351d4e2636ee078e349e241d094",
+      "return_code": 0,
+      "run_id": "phy-v2-o2i-rebased-1b55ca1-seed20260927-offline_umi_n258_fwa_high_loss",
+      "source_config": "config/offline_umi_n258_fwa_high_loss.ini"
+    }
+  ],
+  "schema_version": 1,
+  "seed": 20260927,
+  "source_dirty": false,
+  "source_sha": "1b55ca191e27a368936476fff33fc622833d8d13"
+}

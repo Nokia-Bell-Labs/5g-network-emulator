@@ -18,6 +18,15 @@ public:
     }
 
 public:
+    // The orbit is defined by the radius and the angle, both derived from the position:
+    // moving the UE has to rebuild them or it would snap back to the old circle.
+    void set_pos(float x, float y) override
+    {
+        mobility_model_base::set_pos(x, y);
+        radius = current_pos.get_distance();
+        angle = atan2(current_pos._y(), current_pos._x());
+    }
+
     void update_pos(float current_t)
     {
         if (current_t >= t_target)

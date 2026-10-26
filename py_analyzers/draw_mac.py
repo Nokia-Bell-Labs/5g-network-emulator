@@ -7,6 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 TIMESTAMP_DIR_RE = re.compile(r"^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}$")
+UE_LOG_RE = re.compile(r"ue_log_(\d+)\.txt$")
+
+# Capacity reference over the throughput curves. Off: the model behind it is a rough
+# Shannon bound over one UE's SINR and it is not calibrated. Set to True to debug with it.
+DRAW_SHANNON_LIMIT = False
 
 class ShannonParams:
     def __init__(self, bandwidth_mhz, mimo_layers=1, bw_efficiency=0.67,
@@ -56,6 +61,40 @@ def parse_grid_log(fname: str) -> dict[int, dict[int, float]]:
                 data[ue][sec] += tp
     return data
 
+def parse_grid_header(fname: str) -> dict[str, str]:
+    with open(fname, "r") as f:
+        for line in f:
+            entry = {}
+            for token in line.strip().split():
+                if ":" in token:
+                    k, v = token.split(":", 1)
+                    entry[k] = v
+            if "id" in entry:
+                break
+            if "bw" in entry:
+                return entry
+    return {}
+
+def shannon_params(header: dict[str, str], direction: str) -> ShannonParams | None:
+    try:
+        bw_mhz = float(header.get("bw", 0.0)) / 1e6
+    except ValueError:
+        bw_mhz = 0.0
+    if bw_mhz <= 0:
+        return None
+
+    # The carrier is shared in time, so each direction only gets its slots.
+    share = 1.0
+    tdd = header.get("tdd", "").split("/")
+    if len(tdd) >= 2:
+        try:
+            n_dl, n_ul = float(tdd[0]), float(tdd[1])
+            if n_dl + n_ul > 0:
+                share = (n_dl if direction == "DL" else n_ul) / (n_dl + n_ul)
+        except ValueError:
+            pass
+    return ShannonParams(bandwidth_mhz=bw_mhz * share)
+
 def parse_sinr(fname: str) -> np.ndarray:
     sinr_vals = []
     with open(fname, "r") as f:
@@ -67,10 +106,15 @@ def parse_sinr(fname: str) -> np.ndarray:
                     pass
     return np.asarray(sinr_vals)
 
-def find_latest_ue_log(ue_dir: str) -> str | None:
+def find_reference_ue_log(ue_dir: str) -> str | None:
+    # UE 0 is the UE under study, so it is the reference for the capacity curve.
     files = glob.glob(os.path.join(ue_dir, "ue_log_*.txt"))
     if not files:
         return None
+    for f in files:
+        match = UE_LOG_RE.search(os.path.basename(f))
+        if match and int(match.group(1)) == 0:
+            return f
     files.sort(key=os.path.getmtime, reverse=True)
     return files[0]
 
@@ -86,11 +130,19 @@ def draw_time_series(output_dir: str, grid_file: str, ue_log: str | None, direct
         ue_lines[ue] = (secs, mbps)
 
     capacity_vals, capacity_secs = [], []
-    if ue_log:
-        sinr_all = parse_sinr(ue_log)
-        if sinr_all.size:
+    capacity_label = "Modified Shannon Limit"
+    if DRAW_SHANNON_LIMIT:
+        shannon_cfg = shannon_params(parse_grid_header(grid_file), direction)
+        sinr_all = parse_sinr(ue_log) if ue_log else np.asarray([])
+        if shannon_cfg is None or not sinr_all.size:
+            # Without the grid bandwidth or a SINR series the reference would be invented.
+            print(f"[WARN] {direction}: no capacity reference, "
+                  f"{'no bandwidth in the grid log' if shannon_cfg is None else 'no SINR samples'}.")
+        else:
+            match = UE_LOG_RE.search(os.path.basename(ue_log))
+            if match:
+                capacity_label += f" (UE{match.group(1)})"
             sinr_dir = sinr_all[0::2] if direction == "DL" else sinr_all[1::2]
-            shannon_cfg = ShannonParams(bandwidth_mhz=14 if direction == "DL" else 6)
             C_samples = shannon_cfg.compute_capacity(sinr_dir, is_ul=(direction == "UL"))
             n_seconds = len(C_samples) // shannon_cfg.sinr_sample_rate
             capacity_vals = [np.mean(C_samples[i*shannon_cfg.sinr_sample_rate:(i+1)*shannon_cfg.sinr_sample_rate])
@@ -103,7 +155,7 @@ def draw_time_series(output_dir: str, grid_file: str, ue_log: str | None, direct
         plt.plot(secs, mbps, linestyle="-", marker="o", linewidth=2,
                  color=cmap(idx % cmap.N), label=f"UE {ue}")
     if capacity_secs:
-        plt.plot(capacity_secs, capacity_vals, "k--", linewidth=2, label="Modified Shannon Limit")
+        plt.plot(capacity_secs, capacity_vals, "k--", linewidth=2, label=capacity_label)
 
     plt.xlabel("Time (s)")
     plt.ylabel(f"Throughput {direction} (Mbps)")
@@ -115,7 +167,7 @@ def draw_time_series(output_dir: str, grid_file: str, ue_log: str | None, direct
     plt.savefig(out_png)
     print(f"[SAVED] {out_png}")
 
-def draw_cdf(output_dir: str, grid_file: str):
+def draw_cdf(output_dir: str, grid_file: str, direction: str = "DL"):
     ue_totals, ue_seconds = {}, {}
     with open(grid_file, "r") as f:
         for line in f:
@@ -149,14 +201,15 @@ def draw_cdf(output_dir: str, grid_file: str):
     cdf = np.arange(1, len(sorted_vals) + 1) / len(sorted_vals)
 
     plt.figure(figsize=(8, 6))
-    plt.plot(sorted_vals, cdf, linewidth=2)
-    plt.xlabel("Normalized Average UE Throughput (Mbps per UE)")
+    plt.plot(sorted_vals, cdf, linewidth=2, marker='o')
+    plt.xlabel(f"Normalized Average UE Throughput {direction} (Mbps per UE)")
     plt.ylabel("CDF")
-    plt.title("CDF of Normalized UE Throughput")
+    plt.title(f"CDF of Normalized UE Throughput ({direction})")
     plt.grid(True)
     plt.tight_layout()
 
-    out_png = os.path.join(output_dir, "cdf_throughput.png")
+    suffix = "" if direction == "DL" else f"_{direction.lower()}"
+    out_png = os.path.join(output_dir, f"cdf_throughput{suffix}.png")
     plt.savefig(out_png)
     print(f"[SAVED] {out_png}")
 
@@ -171,19 +224,20 @@ def main():
 
     mac_dir = os.path.join(latest_log, "mac")
     ue_dir = os.path.join(latest_log, "ue")
-    ue_log = find_latest_ue_log(ue_dir) if os.path.isdir(ue_dir) else None
+    ue_log = find_reference_ue_log(ue_dir) if os.path.isdir(ue_dir) else None
 
     ul_file = os.path.join(mac_dir, "grid_log_ul.txt")
     dl_file = os.path.join(mac_dir, "grid_log_dl.txt")
-    if not (os.path.exists(ul_file) or os.path.exists(dl_file)):
+
+    directions = [(d, f) for d, f in (("DL", dl_file), ("UL", ul_file))
+                  if os.path.exists(f) and os.path.getsize(f) > 0]
+    if not directions:
         print("[ERROR] UL or DL grid logs not found.")
         sys.exit(1)
 
-    direction = "DL" if os.path.exists(dl_file) and os.path.getsize(dl_file) > 0 else "UL"
-    grid_file = dl_file if direction == "DL" else ul_file
-
-    draw_time_series(results_base, grid_file, ue_log, direction)
-    draw_cdf(results_base, grid_file)
+    for direction, grid_file in directions:
+        draw_time_series(results_base, grid_file, ue_log, direction)
+        draw_cdf(results_base, grid_file, direction)
 
 if __name__ == "__main__":
     main()

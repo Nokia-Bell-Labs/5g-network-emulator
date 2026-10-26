@@ -1,0 +1,47 @@
+{
+  "artifact_kind": "generated_result",
+  "bytes_conserved": true,
+  "ce_segments": 23440,
+  "delivered_bytes": 1457316000,
+  "ecn": "ect1",
+  "fikore_revision": "b064e2a52c0b925820bf14e3e26a6d28e6afeca8",
+  "goodput_mbps": 38.86176,
+  "in_flight_bytes": 18000,
+  "kind": "prague",
+  "l4s_target_ms": 5.0,
+  "lost_bytes_by_cause": {
+    "budget": 0,
+    "queue": 0,
+    "radio": 0
+  },
+  "lost_segments": 0,
+  "max_events_per_reply": 10,
+  "n_ues": 1,
+  "prague": {
+    "alpha": 0.019867897033691406,
+    "cwnd": 36000.0,
+    "pacing_rate_bps": 44994968.0,
+    "packet_size": 1500,
+    "packets_ce": 23440,
+    "packets_lost": 0,
+    "srtt_us": 6027,
+    "state": "in_cwr",
+    "vrtt_us": 25000
+  },
+  "reply_bytes": 300189792,
+  "regeneration_command": "PYTHONPATH=transport python3 transport/benchmarks/validate_scale.py --duration 300 --mode prague",
+  "simulated_s": 300.0,
+  "source_runner": "transport/benchmarks/validate_scale.py",
+  "slots": 300000,
+  "srtt_ms": 6.029787755540926,
+  "submitted_bytes": 1457334000,
+  "terminal_bytes": {
+    "delivered": 1457316000,
+    "dropped": 0,
+    "expired": 0
+  },
+  "transport_retransmits": 0,
+  "transport_rto_events": 0,
+  "us_per_slot": 354.8909922471891,
+  "wall_s": 106.46729767415673
+}

@@ -1,0 +1,13 @@
+{
+  "outage_definition": "MCS below zero in >=99% of eligible samples",
+  "schema_version": 1,
+  "service_conditioning": "contiguous positive-offer segments, non-outage UE; queue backlog is not observed",
+  "service_windows_s": [
+    0.01,
+    0.1,
+    1.0
+  ],
+  "source_manifest": "/home/pablop/devel/fikore/5g-network-emulator/results/harq-final-6770c64/legacy-production/manifest.json",
+  "source_manifest_sha256": "ceb8e1d16d212896653effdb7608f461db8309758d2ca05067d145d5ebe63dba",
+  "warmup_s": 20.0
+}

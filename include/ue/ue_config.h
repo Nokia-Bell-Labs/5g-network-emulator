@@ -7,6 +7,7 @@
 #pragma once
 
 #include <phy_layer/phy_config.h>
+#include <phy_layer/phy_l_definitions.h>
 #include <random>
 #include <traffic_models/traffic_config.h>//este no estaba antes
 #include <pdcp_layer/pdcp_config.h>
@@ -34,7 +35,7 @@
 struct ue_model
 {
     ue_model(){}
-    ue_model(int _n_antennas, float _nominal_pusch_p0,bool _set_ul_pow,float _tx_power_ul, float _alpha_ul, int _scaling_factor, int _cqi_period, 
+    ue_model(int _n_antennas, float _nominal_pusch_p0, ul_power_mode _ul_power_mode, float _tx_power_ul, float _alpha_ul, int _scaling_factor, int _cqi_period, 
              int _ri_period, float _ue_h,int _o2i)
              {
                  n_antennas = _n_antennas;
@@ -42,19 +43,26 @@ struct ue_model
                  ri_period = _ri_period; 
                  ue_h = _ue_h; 
                  nominal_pusch_p0=_nominal_pusch_p0;
-                 set_ul_pow=_set_ul_pow;
+                 power_mode=_ul_power_mode;
                  tx_power_ul=_tx_power_ul;
                  alpha_ul=_alpha_ul;
                  scaling_factor = _scaling_factor; 
                  o2i=_o2i;
+                 penetration_profile =
+                     _o2i == IN_BUILDING
+                         ? PENETRATION_LEGACY_AUTO
+                         : PENETRATION_NONE;
+                 vehicle_profile = VEHICLE_STANDARD;
             } 
     int n_antennas; 
     float nominal_pusch_p0; 
-    bool set_ul_pow;
-    float tx_power_ul;
+    ul_power_mode power_mode = ul_power_mode::fixed;
+    float tx_power_ul = 23.0f;
     float alpha_ul; 
     float scaling_factor = 1;
     int o2i;
+    int penetration_profile = PENETRATION_LEGACY_AUTO;
+    int vehicle_profile = VEHICLE_STANDARD;
     int cqi_period; 
     int ri_period; 
     float ue_h; 
@@ -138,12 +146,14 @@ struct ue_config
             }
     int ul_queue_n = -1; 
     int dl_queue_n = -1;
+    std::string control_id = "";
     ue_model ue_m; 
     traffic_config traffic_c; 
     mobility_config mobility_c; 
     float delta_metric; 
     float delay_t_metric; 
     float beta_metric;
+    bool beta_metric_configured = false;
     float pkt_delay_budget = 0.35f;
     int log_freq = 0; 
     bool log_ue = false; 
@@ -155,8 +165,9 @@ struct ue_config
     dualpi2_config l4s_c;
     phy_ue_config get_phy_config()
     {
-      return phy_ue_config(ue_m.alpha_ul,ue_m.nominal_pusch_p0,ue_m.set_ul_pow,ue_m.tx_power_ul, ue_m.cqi_period, ue_m.ri_period,
+      return phy_ue_config(ue_m.alpha_ul,ue_m.nominal_pusch_p0,ue_m.power_mode,ue_m.tx_power_ul, ue_m.cqi_period, ue_m.ri_period,
                                   ue_m.n_antennas,  ue_m.ue_h, priority,
-                                  delay_t_metric, delta_metric, beta_metric, mobility_c.get_max_speed(), ue_m.scaling_factor);
+                                  delay_t_metric, delta_metric, beta_metric, mobility_c.get_max_speed(), ue_m.scaling_factor,
+                                  ue_m.penetration_profile, ue_m.vehicle_profile);
     }
 };

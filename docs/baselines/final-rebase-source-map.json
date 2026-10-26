@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "rebase": {
+    "old_base": "9a46fad21f940f4be9fef229b2daabae2f005170",
+    "old_head": "3c373c1442e30411a77310c54e17d7e71fb6f351",
+    "new_base": "325dfadd3809b2d7def25a980ef6782e1819ce48",
+    "new_head_before_final_changes": "1b8337186011d9607020798f104a59088bde52a2"
+  },
+  "method": "git range-diff plus stable patch-id equality",
+  "mappings": [
+    {
+      "purpose": "Integrated implementation and original packet evidence",
+      "old_commit": "1b55ca191e27a368936476fff33fc622833d8d13",
+      "rebased_commit": "be8dcb4d550b8ce42d22640ed66c13c9139d0a08",
+      "stable_patch_id": "7da46301a6b641fca15d717055ba943c7d940b13"
+    },
+    {
+      "purpose": "Deterministic map catalog implementation",
+      "old_commit": "8e1b3680d76b21daf76fd43596a9918972368fb7",
+      "rebased_commit": "278d4d5028ef6235e28ad60b4d593aea11dbe2aa",
+      "stable_patch_id": "ad7138e645a8ae40f87fe379fa87834930ed6e9c"
+    },
+    {
+      "purpose": "Legacy map comparison source",
+      "old_commit": "648aa7bedab82e55faed769ba16234c94f4d749d",
+      "rebased_commit": "53fa98a08acb462647b248b091fdfd4e769d803f",
+      "stable_patch_id": "fb8d516157572270adaf81bf11d960d1a13f9a8d"
+    },
+    {
+      "purpose": "Previous evidence refresh",
+      "old_commit": "b3b33885e09c38193fc6c0ecd8df3559f40222e9",
+      "rebased_commit": "9bf7f6c696570dc037b661f2fe43eea89ec35ca4",
+      "stable_patch_id": "591ecd2cbc29a4c5becf0910e60bd1b206343abc"
+    },
+    {
+      "purpose": "Generalized throughput schedulers",
+      "old_commit": "7d8a76c031f3b61adb51abdbb0521128e41e5a2f",
+      "rebased_commit": "a8dd44e7c3c5b654be88ec4f766f40276bc01db5",
+      "stable_patch_id": "1d07ecaecb8e074499a836c04c51c35a36bd773c"
+    },
+    {
+      "purpose": "Scheduler characterization",
+      "old_commit": "a658954b1be188b1a32158b352802967dcb15159",
+      "rebased_commit": "398ce5067f76931a38ae0d4d31e44df329d8522f",
+      "stable_patch_id": "f181f96138a273bd8088d97e6fa0dc03f8731663"
+    },
+    {
+      "purpose": "Hardened legacy BLER and HARQ",
+      "old_commit": "7a0c8d773e18fec3531e40892a8156bda4350c12",
+      "rebased_commit": "e493ae3c0542dae7d0ce531c773cf543acf29928",
+      "stable_patch_id": "6091031793bf4192eeecf6b0c7b6938d1808d178"
+    },
+    {
+      "purpose": "HARQ accounting telemetry",
+      "old_commit": "4e4ec5fdd26a74ad9c0b838313f39de4d0c9b021",
+      "rebased_commit": "a4a5d2587a9e49b6e7af2cdc0129661692d0e6fc",
+      "stable_patch_id": "2271896beba66e7c4575fef7b75ccfc7131ffaa4"
+    },
+    {
+      "purpose": "Privileged NFQUEUE lifecycle gate",
+      "old_commit": "69da774ea288694055be59759cdd74b652faaaf0",
+      "rebased_commit": "64312dd8698bac5708e8363930db01ee14790285",
+      "stable_patch_id": "b5040ec29a34c55e4f15d656621cc1c96ad25b2b"
+    },
+    {
+      "purpose": "Scheduler family evidence",
+      "old_commit": "a849796d8ba83ba0d481a2d0f2c572cc5f4e7527",
+      "rebased_commit": "a68a9e1e8beb5733be978556a914281d17b022b3",
+      "stable_patch_id": "d479924211b9bcde1fb099141e4c0116db0e95f1"
+    },
+    {
+      "purpose": "NFQUEUE receive shutdown",
+      "old_commit": "5c94f507d33346fcfacc601919392c10956ee29a",
+      "rebased_commit": "41f6e3ec84c0f670b25e5d73dce3c789f93fe5da",
+      "stable_patch_id": "bef489dd27d1fa882a1414ed98c7a543ae6e6801"
+    },
+    {
+      "purpose": "HARQ and NFQUEUE adversarial closeout",
+      "old_commit": "714108a0676d01654daa93ca7de4a19039dd6db0",
+      "rebased_commit": "bb6567e8661f1053e7802aa88e6fe6a85dcb615b",
+      "stable_patch_id": "d4c034b9ef2c0eb9abc5c61d1d32e633feec6420"
+    },
+    {
+      "purpose": "Malformed NFQUEUE fail-fast handling",
+      "old_commit": "0f884e05ef65780add10dbf81c2e0aea9ec67ad3",
+      "rebased_commit": "3094abdfc2546bfe8e9a7c57cb1f005e337a35b0",
+      "stable_patch_id": "45e1ac8820035708a4bc9922c5c15f5bd1e1d506"
+    },
+    {
+      "purpose": "Final pre-rebase documentation and evidence",
+      "old_commit": "3c373c1442e30411a77310c54e17d7e71fb6f351",
+      "rebased_commit": "1b8337186011d9607020798f104a59088bde52a2",
+      "stable_patch_id": "134a518a509ad11a672e502b6e474a42ba81188e"
+    }
+  ]
+}

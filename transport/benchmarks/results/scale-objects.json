@@ -1,0 +1,51 @@
+{
+  "artifact_kind": "generated_result",
+  "bytes_conserved": true,
+  "delivered_bytes_by_ue": [
+    637890000,
+    637890000,
+    325414500,
+    482176500
+  ],
+  "fikore_revision": "b064e2a52c0b925820bf14e3e26a6d28e6afeca8",
+  "in_flight_bytes": 184500,
+  "kind": "objects",
+  "lost_bytes_by_cause": {
+    "budget": 0,
+    "queue": 0,
+    "radio": 0
+  },
+  "max_events_per_reply": 15,
+  "mean_rtt_ms_by_ue": [
+    40.34135235370545,
+    39.50050246205345,
+    80.59919734618472,
+    52.95781307795236
+  ],
+  "median_object_ms": 180.00000000000682,
+  "n_ues": 4,
+  "objects_completed": 5554,
+  "reply_bytes": 498392446,
+  "regeneration_command": "PYTHONPATH=transport python3 transport/benchmarks/validate_scale.py --duration 300 --mode objects",
+  "segment_bytes": 375000,
+  "simulated_s": 300.0,
+  "source_runner": "transport/benchmarks/validate_scale.py",
+  "slots": 300000,
+  "submitted_bytes": 2083555500,
+  "terminal_bytes": {
+    "delivered": 2083371000,
+    "dropped": 0,
+    "expired": 0
+  },
+  "throughput_jain": 0.9417743225100716,
+  "throughput_mbps_by_ue": [
+    17.0104,
+    17.0104,
+    8.67772,
+    12.85804
+  ],
+  "transport_retransmits": 0,
+  "transport_rto_events": 0,
+  "us_per_slot": 446.0440221506481,
+  "wall_s": 133.81320664519444
+}

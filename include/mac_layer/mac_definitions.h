@@ -38,7 +38,7 @@ static const int SCH_RBG_SIZE[2][4][3] =
 };
 static const int SCH_N_RB_MAX[SCH_MAX_NUMEROLOGY + 1] = {INF, INF, INF, INF, INF, INF};//{275, 275, 275, 275, 275, 275};
 //static const int SCH_N_RB_MAX[SCH_MAX_NUMEROLOGY + 1] = {550, 550, 550, 550, 550, 550};
-static const int SCH_SC_SPACING[SCH_MAX_NUMEROLOGY + 1] = {15, 30, 60, 120, 250, 480};
+static const int SCH_SC_SPACING[SCH_MAX_NUMEROLOGY + 1] = {15, 30, 60, 120, 240, 480};
 // HARQ DEFINTIONS
 #define SPEED_OF_LIGHT 300000000.0
 
@@ -148,7 +148,7 @@ static int GET_RBG_INDEX(int size)
 static int SINR_TO_INDEX(float sinr){return std::max(std::min(int(ceil(sinr))+20, MAX_SINR_INDEX-1), 0);}
 
 // MCS-SINR to BLER									
-static double BLER_MCS_SINR[2][5][4][28][MAX_SINR_INDEX] = 	{ 
+static const double LEGACY_BLER_MCS_SINR[2][5][4][28][MAX_SINR_INDEX] = {
 												 { 
 												  { 
 												   { 

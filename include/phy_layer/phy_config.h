@@ -10,6 +10,8 @@
 #include <random>
 #include <string>
 #include <map/map_handler.h>
+#include <phy_layer/phy_l_definitions.h>
+#include <phy_layer/power_model.h>
 
 //--------------------------------------------------------------------------------------------------
 // scenario_config(): modeled scenario configuration struct.
@@ -67,7 +69,10 @@ struct phy_enb_config
     phy_enb_config(float _tx_power, int _modulation_m, float _target_ber,
                    int _cqi_mode, float _frequency, int _bandwidth, int _mimo_l,
                    int _metric_type, int _n_int_ues, int _n_int_eNBs, float _d_int, float _interfered_ratio,
-                   float _thermal_n, float _figure_n_enb, float _figure_n_ut, float _eNB_gain, float _UT_gain, float _power_boost, int _numerology)
+                   float _thermal_n, float _figure_n_enb, float _figure_n_ut, float _eNB_gain, float _UT_gain, float _power_boost, int _numerology,
+                   float _pf_alpha = 1.0f,
+                   float _throughput_time_window_ms = 100.0f,
+                   bool _throughput_intra_tti_update = false)
     {
         tx_power = _tx_power;
         modulation_m = _modulation_m;
@@ -88,6 +93,9 @@ struct phy_enb_config
         UT_gain = _UT_gain;
         power_boost = _power_boost;
         numerology = _numerology;
+        pf_alpha = _pf_alpha;
+        throughput_time_window_ms = _throughput_time_window_ms;
+        throughput_intra_tti_update = _throughput_intra_tti_update;
     }
     float tx_power;
     int modulation_m;
@@ -96,6 +104,7 @@ struct phy_enb_config
     float frequency;
     int bandwidth;
     int n_rbgs;
+    int n_carrier_prbs = 0;
     int n_sc_rbg;
     int mimo_l;
     int metric_type;
@@ -110,6 +119,9 @@ struct phy_enb_config
     float UT_gain;
     float power_boost;
     int numerology;
+    float pf_alpha = 1.0f;
+    float throughput_time_window_ms = 100.0f;
+    bool throughput_intra_tti_update = false;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -130,15 +142,17 @@ struct phy_enb_config
 struct phy_ue_config
 {
     phy_ue_config() {}
-    phy_ue_config(float _alpha_ul, float _nominal_pusch_p0, bool _set_ul_pow, float _tx_power_ul, int _cqi_period,
+    phy_ue_config(float _alpha_ul, float _nominal_pusch_p0, ul_power_mode _ul_power_mode, float _tx_power_ul, int _cqi_period,
                   int _ri_period, int _n_antennas, float _ue_h, float _priority,
-                  float _delay_t, float _delta, float _beta, float _max_speed, float _scaling_factor)
+                  float _delay_t, float _delta, float _beta, float _max_speed, float _scaling_factor,
+                  int _penetration_profile = PENETRATION_LEGACY_AUTO,
+                  int _vehicle_profile = VEHICLE_STANDARD)
     {
 
         cqi_period = _cqi_period;
         alpha_ul = _alpha_ul;
         nominal_pusch_p0 = _nominal_pusch_p0;
-        set_ul_pow=_set_ul_pow;
+        power_mode=_ul_power_mode;
         tx_power_ul=_tx_power_ul;
         // RI estimation
         ri_period = _ri_period;
@@ -153,11 +167,13 @@ struct phy_ue_config
         scaling_factor = _scaling_factor;
 
         priority = _priority;
+        penetration_profile = _penetration_profile;
+        vehicle_profile = _vehicle_profile;
     }
 
     float nominal_pusch_p0;
     float alpha_ul;
-    bool set_ul_pow;
+    ul_power_mode power_mode = ul_power_mode::fixed;
     float tx_power_ul;
     int cqi_period;
     int ri_period;
@@ -169,6 +185,8 @@ struct phy_ue_config
     float max_speed;
     float scaling_factor;
     float priority = 1;
+    int penetration_profile = PENETRATION_LEGACY_AUTO;
+    int vehicle_profile = VEHICLE_STANDARD;
 };
 
 #endif

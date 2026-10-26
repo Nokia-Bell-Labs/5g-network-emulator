@@ -16,6 +16,7 @@
 #include <phy_layer/phy_config.h>
 #include <phy_shared/phy_shared.h>
 #include <mac_layer/metric_handler.h>
+#include <mac_layer/throughput_state.h>
 #include <mobility_models/pos2d.h>
 #include <utils/conversions.h>
 #include <utils/terminal_logging.h>
@@ -80,7 +81,10 @@ public:
     phy_layer(int _tx, int _id, scenario_config _scenario_config, phy_ue_config _phy_ue_config, phy_enb_config _phy_enb_config, bool _stochastics = true, int _verbosity = 0);
 
 public:
-    void init(int _n_rbs, int _bandwidth);
+    void init(
+        int _n_rbs,
+        int _bandwidth,
+        int _carrier_prbs);
     int get_cqi(int f_index);
     float get_eff(int f_index);
     int get_ri();
@@ -92,18 +96,42 @@ public:
     float get_mean_cqi();
     float get_mean_mcs();
     float get_mean_eff();
+    float get_mean_scheduler_metric() const;
+    bool uses_throughput_history_scheduler() const
+    {
+        return metric_h.uses_throughput_history();
+    }
     void set_logger(log_handler *_logger);
-    float get_metric(int f, int n_ues);
+    // priority and rr_rank come by value from ue_overrides, n_enabled from the scheduler.
+    // priority is applied here and not inside metric_handler: metric_v[] is only rewritten
+    // on a CQI refresh, so folding it into the cached value would delay a priority change
+    // by up to cqi_period.
+    float get_metric(int f, int n_enabled, int rr_rank, float priority);
     float get_tp(int f);
     float assignRFBandwidth(float bandwidth);
+    void finalize_ul_allocation(int allocated_prbs);
+    void prepare_scheduler_tti(bool active);
+    void record_provisional_service(float scheduled_bits);
+    void update_scheduler_state(float effective_bits, bool active);
+    void reset_scheduler_state();
+    float get_current_tx_power_per_prb_dbm() const { return current_tx_power_per_prb_dbm; }
+    int get_ul_scheduling_prbs() const { return ul_scheduling_prbs; }
+    float get_throughput_average_bits_per_tti() const
+    {
+        return throughput_state.average_throughput();
+    }
 
 public:
-    void estimate_channel_state(float distance, phy_shared &phy_s, float macro_fading, int o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t);
+    // sinr_offset_db comes by value from ue_overrides and is added in sinr_power_model,
+    // which also shifts the reported RSRP: an offset standing for power or losses moves
+    // both. Stored in a member for the duration of the call instead of threaded through
+    // estimate_sinr; only this UE's own thread is inside estimate_channel_state.
+    void estimate_channel_state(float distance, phy_shared &phy_s, float macro_fading, int o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t, float sinr_offset_db);
 
 private:
     void init_metric(int _index);
     void init_scenario(int _type, float _eNB_h, float _w, float _antenna_h, float _ue_h, float _ue_speed); 
-    void init_phy(float _freq, float _ue_speed, float _target_ber, float _ue_h, int _tx, float _scaling_factor, int _mimo_l, int _numerology, int _n_sc_rbg, bool _mcs_tables, float _gain_tx, float _gain_rx, float _tx_power,float _alpha_ul,float _nominal_pusch_p0,bool _set_ul_pow, float _tx_power_ul, float _power_boost,float _NF_UT,float _NF_eNB,int  _num_interf_ues,int  _num_interf_eNBs,float _d_interference, float _interfered_ratio);
+    void init_phy(float _freq, float _ue_speed, float _target_ber, float _ue_h, int _tx, float _scaling_factor, int _mimo_l, int _numerology, int _n_sc_rbg, bool _mcs_tables, float _gain_tx, float _gain_rx, float _tx_power,float _alpha_ul,float _nominal_pusch_p0,ul_power_mode _ul_power_mode, float _tx_power_ul, float _power_boost,float _thermal_noise_density,float _NF_UT,float _NF_eNB,int  _num_interf_ues,int  _num_interf_eNBs,float _d_interference, float _interfered_ratio);
     void estimate_noise_interference(float _tx_power, int _n_ues, float _d_interference, float _interfered_ratio, float _figure, float _gain_tx, float _gain_rx);
     void init_amc(int _modulation_m, int _cqi_m, int _cqi_p);
     void init_rank(int _period, int _n_antennas,int _mimo_layers);
@@ -121,14 +149,16 @@ private:
     void channel_q_efficiency(int f);
     void estimate_ri();
     float sinr_power_model(float _tx_power,float distance,float pathloss, float macro_fading);
+    float ul_power_per_prb_dbm(float distance, int allocated_prbs);
     void estimate_sinr(float distance, int f, float macro_fading);
     void estimate_attenuation(float distance, const pos2d &pos, phy_shared &phy_s);
     void average_cqi();
     void average_sinr();
     void reset_cqi();
     float compute_losses(float distance);//this method includes the oxygen absortion, the penetration and in_building losses
-    float compute_d_in(float _d);
-    float compute_penetration_losses();
+    float compute_penetration_losses(
+        float building_sample,
+        float vehicle_sample);
     float compute_pathloss_ABG(float d, bool LOS);
     float calculateOxygenLoss();
     void check_boundaries();
@@ -137,11 +167,15 @@ private:
     void estimate_metric(int f);
     void estimate_tp(int f);
     void prepare_metrics(float oldest_t, float avg_tp);
+    float standalone_rate_bits_per_tti() const;
+    float throughput_metric_average() const;
     int get_modulation_index();
     int get_n_layers();
 
 private:
-    std::mt19937 gen;
+    std::mt19937 fading_gen;
+    std::mt19937 interference_gen;
+    std::mt19937 cqi_distance_gen;
     std::uniform_real_distribution<float> distance_cqi_dist{-1, 1};
     std::uniform_real_distribution<float> uniform_stochastics{0.0, 1.0};
     std::normal_distribution<float> sinr_stochastics{0.0, 1.0};
@@ -167,6 +201,7 @@ private:
 
 private:
     float noise_interf;
+    float thermal_noise_density;
     float antenna_gain_tx;
     float antenna_gain_rx;
     float noise_figure;
@@ -192,8 +227,11 @@ private:
     float tx_power_eNb;
     float alpha_ul;
     float nominal_pusch_p0;
-    bool set_ul_pow;
+    ul_power_mode power_mode = ul_power_mode::fixed;
     float tx_power_ul;
+    int ul_scheduling_prbs = 1;
+    float current_tx_power_per_prb_dbm = 0.0f;
+    float last_distance = 0.0f;
     float power_boost;
 
 private:
@@ -202,6 +240,7 @@ private:
 private:
     float pathloss;
     float macro_fading;
+    float sinr_offset_db = 0.0f;
     float c_dist;
 
 private:
@@ -239,6 +278,9 @@ private:
 private:
     metric_handler metric_h;
     metric_info metric_i;
+    throughput_history_state throughput_state;
+    bool throughput_intra_tti_update = false;
+    float provisional_service_bits = 0.0f;
 
 private:
     std::vector<int> cqi_v;
@@ -271,13 +313,20 @@ private:
     float antenna_h_172;
     float w;
     int o2i;
+    int penetration_profile = PENETRATION_LEGACY_AUTO;
+    int vehicle_profile = VEHICLE_STANDARD;
     int tx_dir = TX_DL;
 private:
     pos2d prev_pos;
     float a_oxygen;
-    float d_in;
-    float plin;
-    float pltw;
+    // compute_losses() adds pltw + plin, and estimate_noise_interference() calls it during
+    // init(), before estimate_channel_state() has had a chance to compute them. Without an
+    // initializer the noise floor of the very first run depended on whatever was left in
+    // that memory, which made runs irreproducible and occasionally produced an infinite
+    // noise_interf, and with it SINR = -inf for the whole UE.
+    float d_in = 0.0f;
+    float plin = 0.0f;
+    float pltw = 0.0f;
 
 private:
     float freq;

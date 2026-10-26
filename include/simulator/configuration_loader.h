@@ -11,6 +11,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 #include <mac_layer/mac_definitions.h>
 #include <phy_layer/phy_l_definitions.h>
@@ -22,6 +23,7 @@
 #include <phy_layer/phy_config.h>
 #include <mac_layer/tdd_handler.h>
 #include <utils/logging/log_handler.h>
+#include <utils/control/control_config.h>
 #include <utils/monitoring/monitoring_config.h>
 
 std::string getBaseMapPath();
@@ -33,21 +35,14 @@ std::string getBaseMapPath();
 // MAC LAYER
 //
 
-// HARQ DEFINITIONS
-#define HARQ_PROCESSING_DELAY_DFLT 1 // ms
-#define HARQ_PROCESSING_DELAY_VAR 1  // ms
-#define HARQ_RTX_PERIOD_DFLT 4       // ms
-#define HARQ_RTX_PERIOD_VAR 0        // ms
-#define HARQ_RTX_VAR_DFLT 1          // ms
-#define HARQ_MAX_DFLT_RTX 4
-#define HARQ_AIR_DELAY_DFLT 0.01 // Percentage
-
 // SCHEDULER DEFINITIONS
 #define DEFAULT_METRIC SCH_METRIC_DEFAULT // Round Robin
 #define DELTA_METRIC_DEFAULT 1.0
 #define DELAY_METRIC_DEFAULT 0.1
 #define BETA_METRIC_DEFAULT 0.5
 #define PKT_DELAY_BUDGET_DEFAULT 0.35f
+#define PF_ALPHA_DEFAULT 1.0f
+#define THROUGHPUT_TIME_WINDOW_MS_DEFAULT 100.0f
 
 // UE PRIORITY
 #define DEFAULT_UE_PRIORITY 1
@@ -72,11 +67,11 @@ std::string getBaseMapPath();
 #define BACKHAUL_D_VAR_DEFAULT 0.001
 #define DEFAULT_ORDER_PKTS true
 #define MAX_RTX_DEFAULT 4
-#define AIR_DELAY_VAR_DEFAULT 0.01   // %
-#define RTX_PERIOD_DEFAULT 4         // ms
-#define RTX_PERIOD_VAR_DEFAULT 0     // ms
-#define RTX_PROC_DELAY_DEFAULT 1     // ms
-#define RTX_PROC_DELAY_VAR_DEFAULT 1 // ms
+#define AIR_DELAY_VAR_DEFAULT 0.0f
+#define RTX_PERIOD_DEFAULT 0.004f
+#define RTX_PERIOD_VAR_DEFAULT 0.0f
+#define RTX_PROC_DELAY_DEFAULT 0.001f
+#define RTX_PROC_DELAY_VAR_DEFAULT 0.001f
 
 //
 // SCENARIO
@@ -112,7 +107,7 @@ std::string getBaseMapPath();
 // PHY LAYER
 //
 
-#define MIMO_LAYERS_DEFAULT 4
+#define MIMO_LAYERS_DEFAULT 1
 #define ENB_TX_POWER_DEFAULT 40.0
 #define MODULATION_DEFAULT MODULATION_256
 #define TARGET_BER_DEFAULT 0.00005
@@ -127,7 +122,7 @@ std::string getBaseMapPath();
 #define INTERF_ENBS_DEFAULT 2
 #define INTERF_DISTANCE_DEFAULT 1500
 #define INTERF_RATIO_DEFAULT 0.1
-#define THERMAL_N_DEFAULT -107
+#define THERMAL_N_DEFAULT -174
 #define ENB_NOISE_FIGURE_DEFAULT 1
 #define UT_NOISE_FIGURE_DEFAULT 10
 #define ENB_GAIN_DEFAULT 18
@@ -154,13 +149,12 @@ std::string getBaseMapPath();
 //
 #define ALPHA_UL_DEFAULT 0.7
 #define NOMINAL_PUSCH_P0_DEFAULT -60
-#define SET_UL_POW_DEFAULT false
 #define TX_POWER_UL_DEFAULT 23
 #define N_UES_DEFAULT 10
 #define SIM_UE 1
 #define REAL_UE 0
 
-#define N_ANTENNAS_DEFAULT 2
+#define N_ANTENNAS_DEFAULT 1
 
 #define UE_HEIGHT_DEFAULT 1.5
 
@@ -201,6 +195,7 @@ public:
 
     float get_period();
     float get_duration();
+    std::uint64_t get_seed();
     float get_progress_log_period_s();
     std::list<ue_full_config> get_ue_c_list();
     phy_enb_config get_phy_enb_config();
@@ -223,9 +218,15 @@ public:
     // monitoring config
     monitoring_config get_monitoring_config();
 
+    // runtime control config
+    control_config get_control_config();
+
 private:
     float duration = DURATION_DEFAULT;
     float period = PERIOD_DEFAULT;
+    // Run seed. 0 means "not set": random_v then decides between the wall clock and a
+    // reproducible run. See utils/rng_seed.h.
+    std::uint64_t seed = 0;
     float progress_log_period_s = PROGRESS_LOG_PERIOD_S_DEFAULT;
     // UE CONFIG
     std::list<ue_full_config> ue_c_list;
@@ -233,7 +234,6 @@ private:
     float tx_power = ENB_TX_POWER_DEFAULT;
     float alpha_ul = ALPHA_UL_DEFAULT;
     float nominal_pusch_p0 = NOMINAL_PUSCH_P0_DEFAULT;
-    bool set_ul_pow = SET_UL_POW_DEFAULT;
     float tx_power_ul = TX_POWER_UL_DEFAULT;
     int modulation_m = MODULATION_DEFAULT;
     float target_ber = TARGET_BER_DEFAULT;
@@ -252,6 +252,7 @@ private:
     float backhaul_d = BACKHAUL_D_DEFAULT;
     float backhaul_d_var = BACKHAUL_D_VAR_DEFAULT;
     bool order_pkts = DEFAULT_ORDER_PKTS;
+    harq_model harq_model_value = harq_model::legacy_bler;
     // PDCP UL CONFIG
     int max_rtx_ul = MAX_RTX_DEFAULT;
     float air_delay_var_ul = AIR_DELAY_VAR_DEFAULT;
@@ -267,10 +268,15 @@ private:
 
     // Monitoring
     monitoring_config monitoring_c;
+    control_config control_c;
     float rtx_proc_delay_dl = RTX_PROC_DELAY_DEFAULT;
     float rtx_proc_delay_var_dl = RTX_PROC_DELAY_VAR_DEFAULT;
     // METRIC COFIGURATION
     int metric_type = DEFAULT_METRIC;
+    float pf_alpha = PF_ALPHA_DEFAULT;
+    bool pf_alpha_configured = false;
+    float throughput_time_window_ms = THROUGHPUT_TIME_WINDOW_MS_DEFAULT;
+    bool throughput_intra_tti_update = false;
     // LOG DATA
     int log_freq = -1;
     bool log_mac = false;
@@ -290,7 +296,7 @@ private:
         {4, "INDOOR_MIXED_OFFICE"},
         {5, "INDOOR_SHOPPING_MALL"}};
     const std::map<std::string, std::vector<double>> AVAILABLE_FREQUENCIES = {
-        {"URBAN_MICROCELL", {3.5, 4.9, 26, 28}},
+        {"URBAN_MICROCELL", {2.38, 3.5, 4.9, 26, 28}},
         {"URBAN_MACROCELL", {3.5, 4.9, 26, 28}},
         {"RURAL_MACROCELL", {0.7, 0.8, 3.5}},
         {"INDOOR_OPEN_OFFICE", {3.5, 26, 28}},
@@ -300,6 +306,8 @@ private:
     bool mcs_tables = MCS_TABLES_DEFAULT;
     // MAP
     std::string map_file = MAP_FILE_DEFAULT;
+    bool map_file_explicit = false;
+    bool allow_nearest_map_fallback = false;
     // MAC LAYER
     int mimo_layers = MIMO_LAYERS_DEFAULT;
     int ofdm_symbols = OFDM_SYMBOLS_DEFAULT;

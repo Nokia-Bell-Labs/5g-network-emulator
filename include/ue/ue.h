@@ -22,6 +22,7 @@
 // Logging
 #include "utils/logging/mean_handler.h"
 #include <ue/ue_config.h>
+#include <utils/control/ue_overrides.h>
 
 struct schedule_candidate
 {
@@ -123,7 +124,7 @@ public:
 
 public: 
     void init(); 
-    float get_metric(int tx_dir, int f_index, int n_ues);
+    float get_metric(int tx_dir, int f_index, int n_enabled);
     float get_tp(int tx_dir, int f_index);
     int get_cqi(int tx_dir, int f_index);
     float get_eff(int tx_dir, int f_index);
@@ -139,13 +140,90 @@ public:
     float get_oldest_timestamp(int tx_dir);
     float add_pkts(int tx, std::deque<ip_pkt> &pkts);
     int get_id(); 
+    const std::string& get_control_id() const { return control_id; }
     bool has_packets(int tx_dir);
-    schedule_candidate get_schedule_candidate(int tx_dir, int f_index, int n_ues, int ue_index);
+    schedule_candidate get_schedule_candidate(int tx_dir, int f_index, int n_enabled, int ue_index);
     float get_delay_t(); 
     float get_delta(); 
     float handle_pkt(float bits, int tx_dir, int f_index);
+    void finalize_ul_allocation(int allocated_prbs);
+    void prepare_scheduler_tti(int tx_dir, bool active);
+    void record_provisional_scheduler_service(int tx_dir, float scheduled_bits);
+    void commit_scheduler_tti();
+    float get_ul_tx_power_per_prb_dbm() const { return phy_ul.get_current_tx_power_per_prb_dbm(); }
+    int get_ul_scheduling_prbs() const { return phy_ul.get_ul_scheduling_prbs(); }
+    float get_throughput_average_bits_per_tti(int tx_dir) const
+    {
+        return tx_dir == TX_DL
+                   ? phy_dl.get_throughput_average_bits_per_tti()
+                   : phy_ul.get_throughput_average_bits_per_tti();
+    }
+    int get_max_service_gap_ttis(int tx_dir) const
+    {
+        return scheduler_max_service_gap_ttis[tx_dir];
+    }
+    std::uint64_t get_delivered_bits_total(int tx_dir) const
+    {
+        return tx_dir == TX_DL
+                   ? pdcp_dl.delivered_bits_total()
+                   : pdcp_ul.delivered_bits_total();
+    }
+    void reset_scheduler_statistics()
+    {
+        scheduler_current_service_gap_ttis[TX_DL] = 0;
+        scheduler_current_service_gap_ttis[TX_UL] = 0;
+        scheduler_max_service_gap_ttis[TX_DL] = 0;
+        scheduler_max_service_gap_ttis[TX_UL] = 0;
+    }
     void step();
     void add_current_t(double _current_t){current_t = _current_t; }
+
+    // Runtime control state. Only control_manager::tick() writes through this accessor.
+    ue_overrides& overrides() { return ctl; }
+    const ue_overrides& overrides() const { return ctl; }
+
+    // Logical attach/detach. On detach the UE drops every live buffer; see
+    // 02-enabled-semantics: it is removed from the simulation for all purposes.
+    void set_enabled(bool on);
+    bool is_enabled() const { return ctl.enabled; }
+
+    // Handles used by the parameter registry. Mobility and traffic are input state, so
+    // they are assigned through setters instead of overridden at the point of reading.
+    mobility_model& mobility() { return mobility_m; }
+    bool set_traffic_target(int tx_dir, float bps) { return pdcp(tx_dir).set_traffic_target(bps); }
+    bool get_traffic_target(int tx_dir, float &bps) { return pdcp(tx_dir).get_traffic_target(bps); }
+    bool inject_bits(
+        int tx_dir,
+        std::uint64_t bits,
+        std::uint32_t tag,
+        std::uint8_t ecn = ECN_NOT_ECT)
+    { return pdcp(tx_dir).inject_bits(bits, tag, ecn); }
+    // A tag is unique per UE, so forgetting it is not directional.
+    bool forget_object(std::uint32_t tag)
+    {
+        const bool dl = pdcp_dl.forget_object(tag);
+        const bool ul = pdcp_ul.forget_object(tag);
+        return dl || ul;
+    }
+    void enable_object_events()
+    {
+        pdcp_dl.enable_object_events();
+        pdcp_ul.enable_object_events();
+    }
+    std::unordered_map<std::uint32_t, object_counters> take_object_events(int tx_dir)
+    { return pdcp(tx_dir).take_object_events(); }
+    void set_pkt_delay_budget(float budget_s)
+    {
+        pdcp_dl.set_pkt_delay_budget(budget_s);
+        pdcp_ul.set_pkt_delay_budget(budget_s);
+    }
+    float get_pkt_delay_budget() const { return pdcp_dl.get_pkt_delay_budget(); }
+
+    // Read only view for the control channel's get: what the client needs to pace its
+    // own injection. Bits and seconds here; the conversion to bytes happens at the edge.
+    pdcp_layer& pdcp_state(int tx_dir) { return pdcp(tx_dir); }
+    int get_pkt_size(int tx_dir) { return pdcp(tx_dir).get_pkt_size(); }
+    float get_apothem() { return mobility_m.get_apothem(); }
 
 private: 
     void init_logger(); 
@@ -178,6 +256,8 @@ public:
 
 protected: 
     int id; 
+    std::string control_id;
+    ue_overrides ctl;
 
 protected: 
     MapHandler map;
@@ -228,6 +308,10 @@ private:
     bool phy_update_cs = true;
     dualpi2_stats last_l4s_ul_interval_stats;
     dualpi2_stats last_l4s_dl_interval_stats;
+    float scheduler_effective_bits[2] = {0.0f, 0.0f};
+    bool scheduler_active[2] = {false, false};
+    int scheduler_current_service_gap_ttis[2] = {0, 0};
+    int scheduler_max_service_gap_ttis[2] = {0, 0};
 
 };
 

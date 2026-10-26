@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fikore-transport"
+version = "0.1.0"
+description = "Discrete-event transport models over the FikoRE control protocol"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause-Clear" }
+authors = [{ name = "Nokia" }]
+dependencies = []
+
+[project.scripts]
+fikore-iperf3 = "fikore_transport.iperf_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fikore_transport*"]

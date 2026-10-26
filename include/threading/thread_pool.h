@@ -57,13 +57,20 @@ public:
 
     void do_jobs()
     {
-        if(!isRunning)
+        // Under the lock: the workers read isRunning, index and busy while holding it, and
+        // publishing them without it leaves no happens-before edge with whatever the
+        // caller wrote before starting the round. That matters beyond these three fields:
+        // the runtime control plane mutates UE state right before this call, precisely
+        // because the pools are quiescent, and it is the release of this mutex that makes
+        // those writes visible to the workers.
         {
-            isRunning = true; 
+            std::unique_lock <std::mutex> l (lock_);
+            if(isRunning) return;
+            isRunning = true;
             index = 0;
-            busy = goal;  
-            condVar_.notify_all();
+            busy = goal;
         }
+        condVar_.notify_all();
     }
     void wait_threads()
     {

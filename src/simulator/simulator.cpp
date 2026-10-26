@@ -1,4 +1,5 @@
 #include <simulator/simulator.h>
+#include <utils/rng_seed.h>
 #include <utils/monitoring/monitoring_manager.h>
 
 namespace
@@ -18,6 +19,8 @@ simulator::simulator(std::string config_file)
       mac_l(config_loader.get_threading(), ue_h.get_ue_list(), config_loader.get_mac_config(), config_loader.get_tdd_config(), config_loader.get_log_config()),
       ticker(config_loader.get_period(), config_loader.get_duration())
 {
+    // Before any UE is built: every generator derives its stream from this.
+    set_rng_run_seed(config_loader.get_seed());
     verbosity = config_loader.get_log_config().verbosity;
     duration = config_loader.get_duration();
     progress_log_period_s = config_loader.get_progress_log_period_s();
@@ -28,6 +31,7 @@ simulator::simulator(std::string config_file)
     std::list<ue_full_config> ue_c_list = config_loader.get_ue_c_list();
     phy_enb_config phy_c = config_loader.get_phy_enb_config();
     phy_c.n_rbgs = mac_l.get_n_freq_rbg();
+    phy_c.n_carrier_prbs = mac_l.get_n_freq_rb();
     phy_c.n_sc_rbg = mac_l.get_n_sc_rbg();
     pdcp_config pdcp_c_ul = config_loader.get_pdcp_config_ul();
     pdcp_config pdcp_c_dl = config_loader.get_pdcp_config_dl();
@@ -38,6 +42,19 @@ simulator::simulator(std::string config_file)
         ue_h.add_ues(ticker.get_init_t(), *it, phy_c, scenario_c, pdcp_c_ul, pdcp_c_dl, harq_c, config_loader.get_stochastics());
     }
     ue_h.init();
+    // After ue_h.init(): the ue_list is final from here on, which is what makes the
+    // addresses the control plane keeps valid for the whole run.
+    cell_info cell;
+    cell.scenario_type = scenario_c.type;
+    cell.frequency_hz = phy_c.frequency;
+    cell.bandwidth_hz = phy_c.bandwidth;
+    cell.numerology = config_loader.get_mac_config().numerology;
+    cell.n_freq_rbg = mac_l.get_n_freq_rbg();
+    cell.metric_type = config_loader.get_mac_config().metric_type;
+    cell.period_ms = config_loader.get_period();
+    cell.duration_s = duration;
+    cell.map_file = scenario_c.map_file;
+    control.init(config_loader.get_control_config(), ue_h.get_ue_list(), cell);
 }
 
 void simulator::override_duration(float _duration)
@@ -54,18 +71,43 @@ void simulator::start()
 void simulator::join()
 {
     ticker.wait_finished();
-    log_runtime_stop("completed");
+    const run_stop_reason control_reason = control.stop_reason();
+    if (control_reason != run_stop_reason::none)
+        stop_reason_ = control_reason;
+    else if (stop_reason_ == run_stop_reason::none)
+        stop_reason_ = run_stop_reason::completed;
+    exit_code_ = run_stop_exit_code(stop_reason_);
+    log_runtime_stop(run_stop_reason_name(stop_reason_));
 }
 
 void simulator::terminate()
 {
+    if (stop_reason_ == run_stop_reason::none)
+    {
+        stop_reason_ = run_stop_reason::terminated;
+        exit_code_ = run_stop_exit_code(stop_reason_);
+    }
+    // Interrupt closes the socket and releases a blocked reply, but leaves manager
+    // state and the journal intact until the simulation thread has stopped.
+    control.interrupt();
     ticker.stop();
-    log_runtime_stop("terminated");
+    control.stop();
+    log_runtime_stop(run_stop_reason_name(stop_reason_));
 }
 
 void simulator::print_traffic()
 {
     ue_h.print_traffic();
+}
+
+void simulator::run_steps(unsigned int n)
+{
+    // The timestamp carries on across calls: forty calls of run_steps(25) have to be the
+    // same run as one call of run_steps(1000). Restarting it at zero on every call sent
+    // simulated time backwards, which left packets waiting for a release time that never
+    // came again and took their bytes out of the account.
+    for(unsigned int i = 0; i < n; i++)
+        step(total_steps * TTI_US);
 }
 
 void simulator::log_runtime_start()
@@ -81,6 +123,7 @@ void simulator::log_runtime_start()
         << " mode=" << (realtime ? "realtime" : "fast")
         << " duration_s=" << duration
         << " period_ms=" << config_loader.get_period()
+        << " seed=" << rng_run_seed()
         << " progress_log_period_s=" << progress_log_period_s
         << " ues=" << ue_h.get_ue_list()->size()
         << " monitoring=" << (monitoring_cfg.enabled ? "on" : "off")
@@ -122,7 +165,7 @@ void simulator::handle_time_log(double sim_time_s)
             point.fields["step_time_ms_mean"] = make_runtime_field(1000.0 * (time_ue.count() + time_mac.count()) / step_c, field_aggregation::mean);
             point.fields["sim_time_s_last"] = make_runtime_field(sim_time_s, field_aggregation::last);
             point.fields["loop_iterations_sum"] = make_runtime_field(step_c, field_aggregation::sum);
-            point.fields["active_ues_last"] = make_runtime_field(ue_h.get_ue_list()->size(), field_aggregation::last);
+            point.fields["active_ues_last"] = make_runtime_field(ue_h.enabled_count(), field_aggregation::last);
             monitoring.publish(point);
         }
 
@@ -164,7 +207,7 @@ void simulator::maybe_log_progress(double sim_time_s)
         next_progress_log_sim_time_s += progress_log_period_s;
 }
 
-void simulator::step(unsigned int _ts)
+void simulator::step(std::uint64_t _ts)
 {
     double ts = (double)_ts * US2S;
     total_steps++;
@@ -178,6 +221,16 @@ void simulator::step(unsigned int _ts)
     else
     {
         monitoring.clear_slot_timestamp_ns();
+    }
+
+    // Only point where control state is written: both thread pools are parked here.
+    control.tick(ts, (std::int64_t)total_steps - 1);
+    // The control plane can ask for the run to end, e.g. when a credit times out with
+    // on_timeout: abort. request_stop does not join, so it is safe from this thread.
+    if (control.stop_requested())
+    {
+        ticker.request_stop();
+        return;
     }
 
     std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();

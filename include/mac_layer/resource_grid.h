@@ -20,7 +20,11 @@
 
 struct grid_step_metrics
 {
+    int available_rbg_count = 0;
+    int structural_unavailable_rbg_count = 0;
     int scheduled_rbg_count = 0;
+    int effective_rbg_count = 0;
+    int zero_effective_rbg_count = 0;
     int empty_rbg_count = 0;
     int scheduled_ue_count = 0;
     int active_ues_with_data = 0;
@@ -119,7 +123,6 @@ private:
     int verbosity = 0; 
     float current_t = 0; 
     std::vector<ue> *ue_list = nullptr;
-    float max_capacity_bits = 0.0f;
     grid_step_metrics last_step_metrics;
 };
            

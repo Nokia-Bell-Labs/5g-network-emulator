@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<!--
+  FikoRE dashboard.
+
+  Copyright 2026 Nokia
+  Licensed under the BSD 3-Clause Clear License
+  SPDX-License-Identifier: BSD-3-Clause-Clear
+
+  Served by the control API. Telemetry arrives over the WebSocket; control state is always
+  asked to the emulator. The logic with no DOM lives in dash.js and is tested with node.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FikoRE dashboard</title>
+<link rel="stylesheet" href="/static/uplot.min.css">
+<style>
+  :root {
+    --bg: #14171c; --panel: #1c2128; --edge: #2c333d;
+    --ink: #d8dee8; --dim: #8b95a5; --ok: #5fa855; --warn: #d9a13c; --bad: #c64c4c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+           padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--edge);
+           position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 14px; font-weight: 600; margin: 0 10px 0 0; letter-spacing: .02em; }
+  .stat { color: var(--dim); white-space: nowrap; }
+  .stat b { color: var(--ink); font-weight: 600; }
+  .pill { padding: 1px 7px; border-radius: 9px; font-size: 11px; border: 1px solid var(--edge); }
+  .pill.ok { color: var(--ok); border-color: #2f4a2b; }
+  .pill.bad { color: var(--bad); border-color: #4a2b2b; }
+  .pill.warn { color: var(--warn); border-color: #4a3d2b; }
+  main { display: grid; grid-template-columns: 300px 1fr; gap: 12px; padding: 12px; align-items: start; }
+  .side { display: flex; flex-direction: column; gap: 12px; position: sticky; top: 56px; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; padding: 10px 12px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
+  .chart { background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; padding: 6px 8px 2px; }
+  .chart .title { font-size: 12px; color: var(--dim); padding: 2px 4px 6px; display: flex;
+                  justify-content: space-between; align-items: baseline; }
+  .chart .title .note { color: var(--warn); font-size: 11px; }
+  .wide { grid-column: 1 / -1; }
+  #map-wrap { position: relative; }
+  #map { width: 100%; height: 420px; display: block; cursor: crosshair; }
+  label { display: block; color: var(--dim); font-size: 11px; margin: 6px 0 2px; }
+  select, input, button { font: inherit; color: var(--ink); background: #232a33;
+                          border: 1px solid var(--edge); border-radius: 4px; padding: 4px 6px; }
+  input[type=range] { padding: 0; }
+  button { cursor: pointer; }
+  button:hover { border-color: #3c4654; }
+  button.go { background: #26415c; border-color: #33587c; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > * { min-width: 0; }
+  .ues { display: flex; flex-wrap: wrap; gap: 4px; max-height: 150px; overflow: auto; }
+  .ue-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 10px;
+             border: 1px solid var(--edge); cursor: pointer; font-size: 11px; user-select: none; }
+  .ue-chip.off { opacity: .35; }
+  .ue-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .knob { border-top: 1px solid var(--edge); padding-top: 7px; margin-top: 7px; }
+  .knob .name { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  .knob .unit { color: var(--dim); font-size: 11px; }
+  .knob .desc { color: var(--dim); font-size: 11px; margin: 2px 0 4px; }
+  .log { max-height: 200px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+         font-size: 11px; }
+  .log div { padding: 2px 4px; border-bottom: 1px solid var(--edge); cursor: pointer; white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
+  .log div:hover { background: #232a33; }
+  .log .err { color: var(--bad); }
+  .u-legend { font-size: 11px; }
+  .u-legend .u-marker { width: 10px; height: 10px; }
+  .muted { color: var(--dim); }
+  #map-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim); }
+  #map-legend canvas { border: 1px solid var(--edge); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>FikoRE</h1>
+  <span class="stat">link <span id="s-link" class="pill">…</span></span>
+  <span class="stat">tti <b id="s-tti">–</b></span>
+  <span class="stat">t <b id="s-t">–</b> s</span>
+  <span class="stat">UEs <b id="s-ues">–</b></span>
+  <span class="stat">metric <b id="s-metric">–</b></span>
+  <span class="stat">telemetry <span id="s-tlm" class="pill">…</span></span>
+  <span class="stat" id="s-err-wrap" style="display:none">error <span id="s-err" class="pill bad"></span></span>
+  <span class="stat" style="margin-left:auto">
+    window
+    <select id="c-window">
+      <option value="10">10 s</option>
+      <option value="30" selected>30 s</option>
+      <option value="120">2 min</option>
+    </select>
+    <button id="c-pause">pause</button>
+  </span>
+</header>
+
+<main>
+  <div class="side">
+    <div class="card">
+      <h2>UEs</h2>
+      <div class="ues" id="ue-chips"><span class="muted">waiting for telemetry…</span></div>
+      <div class="row" style="margin-top:8px">
+        <button id="ue-all">all</button>
+        <button id="ue-none">none</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Control</h2>
+      <div class="muted" id="ctl-target">target: none selected</div>
+      <div id="knobs"><span class="muted">loading schema…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Applied</h2>
+      <div class="log" id="ctl-log"><span class="muted">nothing yet</span></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="grid" id="charts"></div>
+    <div class="chart wide" style="margin-top:12px">
+      <div class="title">
+        <span>UE trajectory <span class="muted" id="map-sub"></span></span>
+        <span id="map-legend"></span>
+      </div>
+      <div id="map-wrap"><canvas id="map"></canvas></div>
+      <div class="row" style="padding:4px 4px 8px">
+        <label style="margin:0">fading map</label>
+        <input type="range" id="map-alpha" min="0" max="100" value="0" style="width:120px">
+        <span class="muted" id="map-alpha-label">off</span>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/static/uplot.min.js"></script>
+<script src="/static/dash.js"></script>
+<script>
+"use strict";
+(function () {
+  // A debugging tool that hides its own failures is worse than useless: any uncaught
+  // error surfaces in the header instead of leaving stale panels on screen.
+  function showError(text) {
+    var wrap = document.getElementById("s-err-wrap");
+    var pill = document.getElementById("s-err");
+    if (!wrap || !pill) return;
+    wrap.style.display = "";
+    pill.textContent = String(text).slice(0, 160);
+  }
+  window.addEventListener("error", function (e) { showError(e.message); });
+  window.addEventListener("unhandledrejection", function (e) { showError(e.reason); });
+
+  var D = window.FikoDash;
+  var store = new D.Store(30);
+  var bus = new D.CursorBus();
+
+  var scenario = null;
+  var schema = null;
+  var ueState = {};                 // ue id -> control state from the emulator
+  var selected = {};                // ue id -> shown
+  var paused = false;
+  var lastTelemetry = 0;
+  var SYNC = uPlot.sync("fikore");
+
+  // ------------------------------------------------------------------ panels
+
+  // Eleven time series panels, the same ones the matplotlib dashboard had, plus the
+  // control measurement that it could not have. perUe panels get one series per UE;
+  // the rest have fixed series.
+  var PANELS = [
+    { key: "tp_dl",    title: "Throughput DL",              unit: "Mbps", perUe: true },
+    { key: "tp_ul",    title: "Throughput UL",              unit: "Mbps", perUe: true },
+    { key: "sinr_dl",  title: "SINR DL",                    unit: "dB",   perUe: true },
+    { key: "sinr_ul",  title: "SINR UL",                    unit: "dB",   perUe: true },
+    { key: "lat_dl",   title: "Latency DL",                 unit: "ms",   perUe: true },
+    { key: "lat_ul",   title: "Latency UL",                 unit: "ms",   perUe: true },
+    { key: "cong_dl",  title: "Congestion signal DL (CE/total)", unit: "", perUe: true, range: [0, 1] },
+    { key: "cong_ul",  title: "Congestion signal UL (CE/total)", unit: "", perUe: true, range: [0, 1] },
+    { key: "drop_dl",  title: "Drop rate DL",               unit: "",     perUe: true, range: [0, 1] },
+    { key: "drop_ul",  title: "Drop rate UL",               unit: "",     perUe: true, range: [0, 1] },
+    { key: "rt_split", title: "Step time",                  unit: "ms",   series: ["mac", "ue"] },
+    { key: "control",  title: "Control plane",              unit: "cmds", series: ["applied", "rejected", "blocked_ttis"] }
+  ];
+
+  // Which measurement feeds each panel, so an empty panel can say what is missing instead
+  // of leaving an unexplained hole.
+  var PANEL_SOURCE = {
+    tp_dl: "ue_pdcp", tp_ul: "ue_pdcp", lat_dl: "ue_pdcp", lat_ul: "ue_pdcp",
+    sinr_dl: "ue_phy", sinr_ul: "ue_phy",
+    cong_dl: "ue_queue", cong_ul: "ue_queue", drop_dl: "ue_queue", drop_ul: "ue_queue",
+    rt_split: "emulator_runtime", control: "control"
+  };
+  var FLAG_OF = {
+    ue_pdcp: "emit_ue_pdcp", ue_phy: "emit_ue_phy", ue_queue: "emit_ue_queue",
+    ue_mobility: "emit_ue_mobility", emulator_runtime: "emit_emulator_runtime", control: "emit_control"
+  };
+  var seenMeasurements = {};
+
+  var charts = {};                  // panel key -> { u, keys, note }
+
+  function makeChart(panel) {
+    var host = document.createElement("div");
+    host.className = "chart";
+    var title = document.createElement("div");
+    title.className = "title";
+    var label = document.createElement("span");
+    label.textContent = panel.title + (panel.unit ? " [" + panel.unit + "]" : "");
+    var note = document.createElement("span");
+    note.className = "note";
+    title.appendChild(label);
+    title.appendChild(note);
+    host.appendChild(title);
+    var body = document.createElement("div");
+    host.appendChild(body);
+    document.getElementById("charts").appendChild(host);
+
+    var opts = {
+      width: body.clientWidth || 420,
+      height: 150,
+      cursor: {
+        sync: { key: SYNC.key, setSeries: true },
+        // The map is not a uPlot instance, so the hovered instant is published on our own
+        // bus and whoever wants it subscribes.
+        bind: {
+          mouseleave: function (u, targ, handler) {
+            return function (e) { bus.publish(null); handler(e); };
+          }
+        }
+      },
+      legend: { show: true, live: true },
+      scales: { x: { time: false } },
+      axes: [
+        { stroke: "#8b95a5", grid: { stroke: "#2c333d" }, ticks: { stroke: "#2c333d" } },
+        { stroke: "#8b95a5", grid: { stroke: "#2c333d" }, ticks: { stroke: "#2c333d" } }
+      ],
+      series: [{ label: "t [s]" }],
+      hooks: {
+        setCursor: [function (u) {
+          if (u.cursor.idx == null) return;
+          var t = u.data[0][u.cursor.idx];
+          if (t != null) bus.publish(t);
+        }]
+      }
+    };
+    if (panel.range) opts.scales.y = { range: panel.range };
+
+    var u = new uPlot(opts, [[]], body);
+    charts[panel.key] = { u: u, keys: [], host: host, body: body, note: note, panel: panel };
+
+    // The grid has not laid out when the chart is constructed, so clientWidth is 0 and
+    // uPlot would keep a stale size: its axis ticks are computed from the width, and a
+    // wrong one drew overlapping labels. An observer keeps them in step for good, and
+    // covers window resizes and the sidebar growing as knobs appear.
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(function () {
+        var w = body.clientWidth;
+        if (w > 40) u.setSize({ width: w, height: 150 });
+      }).observe(body);
+    }
+  }
+
+  function seriesFor(panel) {
+    if (!panel.perUe) return panel.series;
+    return store.ueIds().filter(function (id) { return selected[id]; });
+  }
+
+  function rebuildSeries(chart, keys) {
+    var u = chart.u;
+    while (u.series.length > 1) u.delSeries(u.series.length - 1);
+    keys.forEach(function (k) {
+      u.addSeries({
+        label: chart.panel.perUe ? "UE " + k : k,
+        stroke: chart.panel.perUe ? D.ueColour(k) : D.ueColour(chart.panel.series.indexOf(k) + 2),
+        width: 1.6,
+        spanGaps: false          // a detached UE leaves a hole, it does not read as zero
+      });
+    });
+    chart.keys = keys;
+  }
+
+  function redrawCharts() {
+    try {
+      redrawChartsInner();
+    } catch (e) {
+      showError("redraw: " + e.message);
+      throw e;
+    }
+  }
+
+  function redrawChartsInner() {
+    PANELS.forEach(function (panel) {
+      var chart = charts[panel.key];
+      var keys = seriesFor(panel);
+      if (keys.join("|") !== chart.keys.join("|")) rebuildSeries(chart, keys);
+
+      var data = store.panelData(panel.key, keys);
+      // Relative time, as in the old dashboard: 0 is now, the window extends left.
+      var xs = data[0].map(function (t) { return t - store.latestT; });
+      // resetScales must be false: the x range is the window we choose, not whatever the
+      // data happens to span. Letting uPlot autoscale here and then overriding it left
+      // the two fighting, with overlapping tick labels on a panel holding one point.
+      chart.u.setData([xs].concat(data.slice(1)), false);
+      chart.u.setScale("x", { min: -store.windowS, max: 0 });
+
+      var src = PANEL_SOURCE[panel.key];
+      chart.note.textContent = (src && !seenMeasurements[src])
+        ? "no data — needs " + (FLAG_OF[src] || src)
+        : "";
+    });
+  }
+
+  function resizeCharts() {
+    PANELS.forEach(function (panel) {
+      var chart = charts[panel.key];
+      var w = chart.body.clientWidth;
+      if (w > 40) chart.u.setSize({ width: w, height: 150 });
+    });
+  }
+
+  // ------------------------------------------------------------------ map
+
+  var mapCanvas = document.getElementById("map");
+  var mapCtx = mapCanvas.getContext("2d");
+  var fading = null;                // { w, h, cellSize, image }
+  var fadingAlpha = 0;
+  var cursorT = null;
+
+  bus.subscribe(function (t) { cursorT = t; drawMap(); });
+
+  function mapMetrics() {
+    var apothem = (scenario && scenario.apothem_m) || 1000;
+    // Equal aspect: the same metres per pixel on both axes, or distances lie.
+    var w = mapCanvas.width, h = mapCanvas.height;
+    var span = apothem * 2;
+    var scale = Math.min(w, h) / span;
+    return { apothem: apothem, scale: scale, cx: w / 2, cy: h / 2 };
+  }
+
+  function toPx(m, x, y) {
+    // y grows upwards in the scenario and downwards on a canvas.
+    return [m.cx + x * m.scale, m.cy - y * m.scale];
+  }
+
+  function toMetres(m, px, py) {
+    return [(px - m.cx) / m.scale, (m.cy - py) / m.scale];
+  }
+
+  function drawMap() {
+    var dpr = window.devicePixelRatio || 1;
+    var wantW = Math.round(mapCanvas.clientWidth * dpr);
+    var wantH = Math.round(mapCanvas.clientHeight * dpr);
+    if (mapCanvas.width !== wantW || mapCanvas.height !== wantH) {
+      mapCanvas.width = wantW;
+      mapCanvas.height = wantH;
+    }
+
+    var m = mapMetrics();
+    var ctx = mapCtx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#1c2128";
+    ctx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+
+    if (fading && fadingAlpha > 0) {
+      var side = fading.cellSize * fading.w * m.scale;
+      ctx.globalAlpha = fadingAlpha;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(fading.bitmap, m.cx - side / 2, m.cy - side / 2, side, side);
+      ctx.globalAlpha = 1;
+    }
+
+    // Distance rings, so the scale is readable without measuring pixels.
+    var stepM = m.apothem > 2000 ? 500 : (m.apothem > 800 ? 250 : 100);
+    ctx.strokeStyle = "#2c333d";
+    ctx.fillStyle = "#6b7585";
+    ctx.lineWidth = 1;
+    ctx.font = (10 * dpr) + "px ui-sans-serif, system-ui, sans-serif";
+    for (var r = stepM; r <= m.apothem; r += stepM) {
+      ctx.beginPath();
+      ctx.arc(m.cx, m.cy, r * m.scale, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.fillText(r + " m", m.cx + 3 * dpr, m.cy - r * m.scale - 2 * dpr);
+    }
+    // Scenario boundary.
+    ctx.strokeStyle = "#3c4654";
+    ctx.strokeRect(m.cx - m.apothem * m.scale, m.cy - m.apothem * m.scale,
+                   2 * m.apothem * m.scale, 2 * m.apothem * m.scale);
+
+    // gNB at the origin.
+    ctx.fillStyle = "#d8dee8";
+    ctx.beginPath();
+    ctx.moveTo(m.cx, m.cy - 6 * dpr);
+    ctx.lineTo(m.cx + 5 * dpr, m.cy + 4 * dpr);
+    ctx.lineTo(m.cx - 5 * dpr, m.cy + 4 * dpr);
+    ctx.closePath();
+    ctx.fill();
+
+    store.ueIds().forEach(function (id) {
+      if (!selected[id]) return;
+      var trail = store.trail(id);
+      if (!trail.length) return;
+
+      var state = ueState[id] || {};
+      var off = state.enabled === false;
+      var colour = off ? "#6b7585" : D.ueColour(id);
+
+      // The trail fades with age, so you can tell where the UE came from. Anything after
+      // the hovered instant is dimmed further: that is the future, relative to the cursor.
+      for (var i = 1; i < trail.length; i++) {
+        var age = (store.latestT - trail[i].t) / store.windowS;
+        var alpha = Math.max(0.12, 1 - age);
+        if (cursorT != null && trail[i].t > cursorT) alpha *= 0.25;
+        var a = toPx(m, trail[i - 1].x, trail[i - 1].y);
+        var b = toPx(m, trail[i].x, trail[i].y);
+        ctx.strokeStyle = colour;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 1.8 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      var head = trail[trail.length - 1];
+      var hp = toPx(m, head.x, head.y);
+
+      // Heading arrow from the last movement.
+      if (trail.length > 1) {
+        var prev = trail[trail.length - 2];
+        var dx = head.x - prev.x, dy = head.y - prev.y;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        if (len > 0.01) {
+          var ang = Math.atan2(-dy, dx);
+          ctx.save();
+          ctx.translate(hp[0], hp[1]);
+          ctx.rotate(ang);
+          ctx.fillStyle = colour;
+          ctx.beginPath();
+          ctx.moveTo(9 * dpr, 0);
+          ctx.lineTo(1 * dpr, 3.5 * dpr);
+          ctx.lineTo(1 * dpr, -3.5 * dpr);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      ctx.arc(hp[0], hp[1], 3.5 * dpr, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // A capped UE carries a ring, a detached one is grey: control state, visible.
+      var capped = (state["dl.rmax_mbps"] > 0) || (state["ul.rmax_mbps"] > 0);
+      if (capped) {
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = 1.2 * dpr;
+        ctx.beginPath();
+        ctx.arc(hp[0], hp[1], 7 * dpr, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = off ? "#6b7585" : "#d8dee8";
+      ctx.font = (11 * dpr) + "px ui-sans-serif, system-ui, sans-serif";
+      ctx.fillText("UE " + id + (off ? " (off)" : ""), hp[0] + 8 * dpr, hp[1] - 6 * dpr);
+
+      // Where it was at the hovered instant.
+      if (cursorT != null) {
+        var at = store.positionAt(id, cursorT);
+        if (at) {
+          var ap = toPx(m, at.x, at.y);
+          ctx.strokeStyle = colour;
+          ctx.lineWidth = 2 * dpr;
+          ctx.beginPath();
+          ctx.arc(ap[0], ap[1], 6 * dpr, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
+      }
+    });
+
+    if (cursorT != null) {
+      ctx.fillStyle = "#8b95a5";
+      ctx.font = (11 * dpr) + "px ui-monospace, monospace";
+      ctx.fillText("t " + (cursorT - store.latestT).toFixed(1) + " s", 8 * dpr, 14 * dpr);
+    }
+  }
+
+  // Hovering the trail publishes that instant, so the charts move their cursor there.
+  mapCanvas.addEventListener("mousemove", function (e) {
+    var rect = mapCanvas.getBoundingClientRect();
+    var dpr = window.devicePixelRatio || 1;
+    var m = mapMetrics();
+    var pos = toMetres(m, (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
+
+    var best = null, bestD = Infinity;
+    store.ueIds().forEach(function (id) {
+      if (!selected[id]) return;
+      store.trail(id).forEach(function (p) {
+        var d = Math.hypot(p.x - pos[0], p.y - pos[1]);
+        if (d < bestD) { bestD = d; best = p; }
+      });
+    });
+    // Within 40 px worth of metres, otherwise the pointer is not really on a trail.
+    if (best && bestD < 40 * dpr / m.scale) bus.publish(best.t);
+  });
+  mapCanvas.addEventListener("mouseleave", function () { bus.publish(null); });
+
+  document.getElementById("map-alpha").addEventListener("input", function (e) {
+    fadingAlpha = e.target.value / 100;
+    document.getElementById("map-alpha-label").textContent =
+      fadingAlpha === 0 ? "off" : Math.round(fadingAlpha * 100) + "%";
+    if (fadingAlpha > 0 && !fading) loadFadingMap();
+    drawMap();
+  });
+
+  function loadFadingMap() {
+    fetch("/scenario/map").then(function (r) { return r.ok ? r.json() : null; }).then(function (meta) {
+      if (!meta) return;
+      return fetch("/scenario/map.bin").then(function (r) { return r.arrayBuffer(); })
+        .then(function (buf) {
+          var values = new Float32Array(buf);
+          var n = meta.cell_number;
+          var scale = D.colourScale(meta.p1, meta.p99);
+          var img = new ImageData(n, n);
+          for (var i = 0; i < n * n; i++) {
+            var rgb = scale(values[i]);
+            img.data[i * 4] = rgb[0];
+            img.data[i * 4 + 1] = rgb[1];
+            img.data[i * 4 + 2] = rgb[2];
+            img.data[i * 4 + 3] = 255;
+          }
+          return createImageBitmap(img).then(function (bitmap) {
+            fading = { w: n, h: n, cellSize: meta.cell_size, bitmap: bitmap };
+            var legend = document.getElementById("map-legend");
+            var bar = document.createElement("canvas");
+            bar.width = 90; bar.height = 10;
+            var bctx = bar.getContext("2d");
+            for (var x = 0; x < 90; x++) {
+              var rgb2 = scale(meta.p1 + (meta.p99 - meta.p1) * x / 89);
+              bctx.fillStyle = "rgb(" + rgb2[0] + "," + rgb2[1] + "," + rgb2[2] + ")";
+              bctx.fillRect(x, 0, 1, 10);
+            }
+            legend.innerHTML = "";
+            legend.appendChild(document.createTextNode(meta.p1.toFixed(0) + " dB"));
+            legend.appendChild(bar);
+            legend.appendChild(document.createTextNode(meta.p99.toFixed(0) + " dB"));
+            drawMap();
+          });
+        });
+    }).catch(function () { /* no map for this scenario: the panel just has no background */ });
+  }
+
+  // ------------------------------------------------------------------ UE chips
+
+  function renderChips() {
+    var host = document.getElementById("ue-chips");
+    var ids = store.ueIds();
+    if (!ids.length) return;
+    host.innerHTML = "";
+    ids.forEach(function (id) {
+      var chip = document.createElement("span");
+      chip.className = "ue-chip" + (selected[id] ? "" : " off");
+      var dot = document.createElement("span");
+      dot.className = "dot";
+      dot.style.background = D.ueColour(id);
+      chip.appendChild(dot);
+      var state = ueState[id] || {};
+      chip.appendChild(document.createTextNode(
+        "UE " + id + (state.enabled === false ? " ✕" : "")));
+      chip.title = "click to show or hide; shift-click to target it in Control";
+      chip.addEventListener("click", function (e) {
+        if (e.shiftKey) {
+          Object.keys(selected).forEach(function (k) { selected[k] = false; });
+          selected[id] = true;
+        } else {
+          selected[id] = !selected[id];
+        }
+        renderChips();
+        renderTarget();
+        redrawCharts();
+        drawMap();
+      });
+      host.appendChild(chip);
+    });
+  }
+
+  function selectedIds() {
+    return store.ueIds().filter(function (id) { return selected[id]; });
+  }
+
+  function renderTarget() {
+    var ids = selectedIds();
+    var all = store.ueIds().length;
+    var label = ids.length === 0 ? "none selected"
+      : (ids.length === all && all > 1 ? "ue/* (" + all + " UEs)"
+        : ids.map(function (i) { return "ue/" + i; }).join(", "));
+    document.getElementById("ctl-target").textContent = "target: " + label;
+  }
+
+  // ------------------------------------------------------------------ control panel
+
+  function renderKnobs() {
+    var host = document.getElementById("knobs");
+    if (!schema) return;
+    host.innerHTML = "";
+
+    schema.params.forEach(function (p) {
+      var box = document.createElement("div");
+      box.className = "knob";
+
+      var head = document.createElement("div");
+      head.innerHTML = '<span class="name">' + p.name + '</span>' +
+                       (p.unit ? ' <span class="unit">[' + p.unit + ']</span>' : '') +
+                       (p.incremental ? ' <span class="pill warn">incremental</span>' : '');
+      box.appendChild(head);
+
+      var desc = document.createElement("div");
+      desc.className = "desc";
+      desc.textContent = p.description || "";
+      box.appendChild(desc);
+
+      var row = document.createElement("div");
+      row.className = "row";
+      var input;
+      if (p.type === "boolean") {
+        input = document.createElement("select");
+        input.innerHTML = '<option value="true">true</option><option value="false">false</option>';
+      } else {
+        input = document.createElement("input");
+        input.type = "number";
+        input.step = "any";
+        if (p.min !== null && p.min !== undefined) input.min = p.min;
+        if (p.max !== null && p.max !== undefined) input.max = p.max;
+        input.style.flex = "1";
+      }
+      row.appendChild(input);
+
+      var btn = document.createElement("button");
+      btn.className = "go";
+      // Incremental knobs add to what is there, so the verb has to be different.
+      btn.textContent = p.incremental ? "inject" : "set";
+      btn.addEventListener("click", function () { sendKnob(p, input); });
+      row.appendChild(btn);
+      box.appendChild(row);
+
+      var current = document.createElement("div");
+      current.className = "desc";
+      current.dataset.knob = p.name;
+      box.appendChild(current);
+
+      host.appendChild(box);
+    });
+
+    refreshKnobValues();
+  }
+
+  function refreshKnobValues() {
+    var ids = selectedIds();
+    var host = document.getElementById("knobs");
+    host.querySelectorAll("[data-knob]").forEach(function (node) {
+      var name = node.dataset.knob;
+      var values = ids.map(function (id) {
+        var st = ueState[id] || {};
+        return st[name];
+      }).filter(function (v) { return v !== undefined; });
+      if (!values.length) { node.textContent = ""; return; }
+      var uniq = Array.from(new Set(values.map(String)));
+      node.textContent = "now: " + (uniq.length === 1 ? uniq[0] : "mixed (" + uniq.length + " values)");
+    });
+  }
+
+  function sendKnob(param, input) {
+    var ids = selectedIds();
+    if (!ids.length) { logLine("no UE selected", true); return; }
+
+    var value;
+    if (param.type === "boolean") value = input.value === "true";
+    else {
+      value = parseFloat(input.value);
+      if (isNaN(value)) { logLine(param.name + ": not a number", true); return; }
+    }
+
+    // Detaching a UE drops its live buffers and re-enabling does not bring them back.
+    if (param.name === "enabled" && value === false) {
+      if (!confirm("Detach " + ids.map(function (i) { return "UE " + i; }).join(", ") +
+                   "?\n\nIts live buffers are dropped and re-enabling does not bring them back.")) return;
+    }
+    if (param.name === "priority" && scenario && scenario.metric_type === 5) {
+      logLine("warning: metric_type is round robin, priority has no effect", true);
+    }
+
+    var body, url;
+    var payload = {};
+    payload[param.name] = value;
+
+    if (ids.length === 1) {
+      url = "/control/ue/" + ids[0];
+      body = payload;
+    } else {
+      url = "/control/batch";
+      var target = ids.length === store.ueIds().length ? ["ue/*"] : ids.map(function (i) { return "ue/" + i; });
+      body = { cmds: target.map(function (t) { return { target: t, set: payload }; }) };
+    }
+
+    fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+    }).then(function (res) {
+      if (res.ok) {
+        logLine("tti " + res.body.tti + "  " + param.name + " = " + value +
+                "  → " + (ids.length === 1 ? "ue/" + ids[0] : ids.length + " UEs"), false, res.body.t);
+      } else {
+        logLine(param.name + " rejected: " + JSON.stringify(res.body.detail), true);
+      }
+      // Always re-read from the emulator; never trust what we think we sent.
+      refreshUeState();
+    }).catch(function (e) { logLine("request failed: " + e.message, true); });
+  }
+
+  function logLine(text, isError, t) {
+    var host = document.getElementById("ctl-log");
+    if (host.querySelector(".muted")) host.innerHTML = "";
+    var row = document.createElement("div");
+    if (isError) row.className = "err";
+    row.textContent = text;
+    if (t != null) {
+      row.title = "click to move every chart cursor to this instant";
+      row.addEventListener("click", function () { bus.publish(t); });
+    }
+    host.insertBefore(row, host.firstChild);
+    while (host.childNodes.length > 60) host.removeChild(host.lastChild);
+  }
+
+  // ------------------------------------------------------------------ polling
+
+  function refreshUeState() {
+    fetch("/ues").then(function (r) { return r.json(); }).then(function (body) {
+      (body.ues || []).forEach(function (entry) {
+        var id = String(entry.target || "").replace("ue/", "");
+        ueState[id] = entry;
+        if (selected[id] === undefined) selected[id] = true;
+        store.ues[id] = true;
+      });
+      document.getElementById("s-tti").textContent = body.tti != null ? body.tti : "–";
+      document.getElementById("s-t").textContent = body.t != null ? body.t.toFixed(3) : "–";
+      renderChips();
+      renderTarget();
+      refreshKnobValues();
+      redrawCharts();
+      drawMap();
+    }).catch(function () { /* health covers the link state */ });
+  }
+
+  function refreshHealth() {
+    fetch("/healthz").then(function (r) { return r.json(); }).then(function (body) {
+      var pill = document.getElementById("s-link");
+      pill.textContent = body.emulator_linked ? "up" : "down";
+      pill.className = "pill " + (body.emulator_linked ? "ok" : "bad");
+
+      var tlm = document.getElementById("s-tlm");
+      var fresh = lastTelemetry > 0 && (Date.now() - lastTelemetry) < 5000;
+      tlm.textContent = fresh ? "flowing" : (body.telemetry_series ? "stale" : "none");
+      tlm.className = "pill " + (fresh ? "ok" : "warn");
+    }).catch(function () {
+      var pill = document.getElementById("s-link");
+      pill.textContent = "api down";
+      pill.className = "pill bad";
+    });
+  }
+
+  function loadScenario() {
+    fetch("/scenario").then(function (r) { return r.json(); }).then(function (body) {
+      scenario = body;
+      var metrics = { 0: "FIFO", 1: "BET", 2: "dist-delay", 3: "w-delay", 4: "max-TP", 5: "round robin", 6: "PF" };
+      var name = metrics[body.metric_type] || body.metric_type;
+      var el = document.getElementById("s-metric");
+      el.textContent = name;
+      if (body.metric_type === 5) {
+        el.innerHTML = name + ' <span class="pill warn">priority has no effect</span>';
+      }
+      document.getElementById("s-ues").textContent =
+        body.n_ues_enabled + (body.n_ues !== body.n_ues_enabled ? " / " + body.n_ues : "");
+      document.getElementById("map-sub").textContent =
+        "apothem " + Math.round(body.apothem_m) + " m" + (body.realtime ? "" : " — fast mode");
+      drawMap();
+    }).catch(function () { /* retried on the next tick */ });
+  }
+
+  function loadSchema() {
+    fetch("/schema").then(function (r) { return r.json(); }).then(function (body) {
+      schema = body;
+      renderKnobs();
+    }).catch(function () {
+      document.getElementById("knobs").innerHTML = '<span class="muted">schema unavailable</span>';
+    });
+  }
+
+  // ------------------------------------------------------------------ stream
+
+  function ingestBatch(points) {
+    points.forEach(function (p) {
+      seenMeasurements[p.measurement] = true;
+      store.ingest(p);
+    });
+    lastTelemetry = Date.now();
+    store.pruneAll();
+
+    // Repaint as soon as data lands, instead of waiting for the timer: a batch arrives
+    // every 200 ms, and the timer below exists only to keep the relative time axis
+    // sliding while nothing arrives.
+    if (Object.keys(store.ues).length && !document.getElementById("ue-chips").dataset.ready) {
+      document.getElementById("ue-chips").dataset.ready = "1";
+      store.ueIds().forEach(function (id) { if (selected[id] === undefined) selected[id] = true; });
+      renderChips();
+      renderTarget();
+    }
+    redrawCharts();
+    drawMap();
+  }
+
+  // First paint from REST, so the page shows the window it missed instead of waiting for
+  // the stream. The WebSocket takes over from there.
+  function loadSnapshot() {
+    fetch("/telemetry/snapshot").then(function (r) { return r.json(); }).then(function (body) {
+      ingestBatch(body.points || []);
+    }).catch(function () { /* the stream will fill it in */ });
+  }
+
+  function connect() {
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    var ws = new WebSocket(proto + "//" + location.host + "/stream");
+    ws.onmessage = function (ev) {
+      if (paused) return;
+      var msg = JSON.parse(ev.data);
+      if (msg.points) ingestBatch(msg.points);
+    };
+    ws.onclose = function () { setTimeout(connect, 1500); };
+  }
+
+  // ------------------------------------------------------------------ wiring
+
+  PANELS.forEach(makeChart);
+
+  document.getElementById("c-window").addEventListener("change", function (e) {
+    store.windowS = parseFloat(e.target.value);
+    redrawCharts();
+    drawMap();
+  });
+  document.getElementById("c-pause").addEventListener("click", function (e) {
+    paused = !paused;
+    e.target.textContent = paused ? "resume" : "pause";
+  });
+  document.getElementById("ue-all").addEventListener("click", function () {
+    store.ueIds().forEach(function (id) { selected[id] = true; });
+    renderChips(); renderTarget(); redrawCharts(); drawMap();
+  });
+  document.getElementById("ue-none").addEventListener("click", function () {
+    store.ueIds().forEach(function (id) { selected[id] = false; });
+    renderChips(); renderTarget(); redrawCharts(); drawMap();
+  });
+  window.addEventListener("resize", function () { resizeCharts(); drawMap(); });
+
+  loadScenario();
+  loadSchema();
+  refreshUeState();
+  refreshHealth();
+  loadSnapshot();
+  connect();
+
+  // Safety net: keeps the relative time axis moving when no telemetry arrives.
+  setInterval(function () { if (!paused) { redrawCharts(); drawMap(); } }, 1000);
+  setInterval(refreshUeState, 2000);
+  setInterval(refreshHealth, 3000);
+  setInterval(loadScenario, 10000);
+  resizeCharts();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "scenario": "../../config/emulated_rural_n78_single_with_background.ini",
+  "run": {
+    "duration_s": 10,
+    "interval_s": 1,
+    "drain_timeout_s": 5
+  },
+  "transport": {
+    "protocol": "udp",
+    "direction": "dl",
+    "parallel_per_ue": 1,
+    "bitrate": "20M",
+    "length_bytes": 1200
+  },
+  "ues": [
+    "capturedStudy"
+  ]
+}

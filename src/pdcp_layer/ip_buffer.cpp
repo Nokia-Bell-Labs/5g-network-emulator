@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <chrono>
+#include <stdexcept>
 #include <pdcp_layer/ip_buffer.h>
 #include <utils/terminal_logging.h>
 
@@ -33,18 +34,25 @@ bool ip_buffer::has_pkts()
     return backend_has_pkts();
 }
 
-void ip_buffer::generate(float bits, float pkt_size, float t, float bh_d, float bh_d_var)
+void ip_buffer::generate(
+    std::uint64_t bits,
+    std::uint64_t pkt_size,
+    float t,
+    float bh_d,
+    float bh_d_var)
 {
+    if (pkt_size == 0)
+        throw std::invalid_argument("packet size must be positive");
     if(current_size < max_size && bits > 0)
     {
-        int pkts = ceil(bits/pkt_size);
+        const std::uint64_t pkts = (bits + pkt_size - 1) / pkt_size;
         if(!backend_has_pkts()) oldest_t = t;
-        for(int i = 0; i < pkts - 1; i++)
+        for(std::uint64_t i = 0; i + 1 < pkts; i++)
         {
             add_pkt(ip_pkt(t, pkt_size, pkt_size, current_id, bh_d, bh_d_var));
             current_id++;
         }
-        float bits_left = bits - (pkts - 1)*pkt_size;
+        const std::uint64_t bits_left = bits - (pkts - 1) * pkt_size;
         if(bits_left > 0) 
         {
             add_pkt(ip_pkt(t, bits_left, bits_left, current_id, bh_d, bh_d_var));
@@ -63,7 +71,7 @@ void ip_buffer::generate(float bits, float pkt_size, float t, float bh_d, float 
     if(verbosity > 0) g_mean.add(bits);
 }
 
-float ip_buffer::drop_pkt(int bits)
+std::uint64_t ip_buffer::drop_pkt(std::uint64_t bits)
 {
     if(verbosity > 0) e_mean.add(bits);
     return bits; 
@@ -71,7 +79,7 @@ float ip_buffer::drop_pkt(int bits)
 
 bool ip_buffer::add_pkt(ip_pkt pkt)
 {
-    if(current_size + pkt.size > max_size)
+    if(pkt.size > max_size - current_size)
     {
         if(verbosity > 0) e_mean.add(pkt.size);
         return false;
@@ -94,10 +102,10 @@ void ip_buffer::step(float _current_t){
     if(l4s_cfg.enabled) l4s_queue.step(current_t);
 }
 
-float ip_buffer::get_pkts(float _bits, harq_pkt& out_pkt)
+std::uint64_t ip_buffer::get_pkts(
+    std::uint64_t bits,
+    harq_pkt& out_pkt)
 {
-    float bits = floorf(_bits); 
-    int n_out_pkts = 0; 
     out_pkt.bits = 0; 
     while(bits > 0 && backend_has_pkts())
     {
@@ -111,12 +119,6 @@ float ip_buffer::get_pkts(float _bits, harq_pkt& out_pkt)
             pkt.is_fragment = false;
             pkt.frags_created++;
             out_pkt.pkts.push_back(std::move(pkt));
-            n_out_pkts++;
-
-            if(bits <= BIT_ROUND_MARGIN) {
-                break; 
-            }
-                
         }
         else
         {
@@ -131,11 +133,11 @@ float ip_buffer::get_pkts(float _bits, harq_pkt& out_pkt)
             pkt.is_fragment = true; 
             pkt.frags_created++;
             backend_requeue_front(std::move(pkt));
-            n_out_pkts++;
         } 
     }
-    current_size -= out_pkt.bits; 
-    if(current_size < 0.0f) current_size = 0.0f;
+    if (out_pkt.bits > current_size)
+        throw std::logic_error("IP buffer bit accounting underflow");
+    current_size -= out_pkt.bits;
     return out_pkt.bits; 
 }
 
@@ -169,7 +171,7 @@ bool ip_buffer::pop_oldest_pkt(harq_pkt& out_pkt)
     if(!backend_has_pkts()) return false;
 
     out_pkt.pkts.clear();
-    out_pkt.bits = 0.0f;
+    out_pkt.bits = 0;
 
     ip_pkt pkt = empty_pkt();
     if(!backend_pop_oldest(pkt)) return false;
@@ -177,8 +179,9 @@ bool ip_buffer::pop_oldest_pkt(harq_pkt& out_pkt)
     out_pkt.bits = pkt.size;
     out_pkt.pkts.push_back(std::move(pkt));
 
+    if (out_pkt.bits > current_size)
+        throw std::logic_error("IP buffer bit accounting underflow");
     current_size -= out_pkt.bits;
-    if(current_size < 0) current_size = 0;
 
     if(backend_has_pkts()) oldest_t = backend_oldest_timestamp();
     else oldest_t = current_t;
@@ -191,10 +194,11 @@ const ip_pkt* ip_buffer::peek_oldest_pkt() const
     return backend_peek_oldest();
 }
 
-void ip_buffer::configure_l4s(dualpi2_config cfg)
+void ip_buffer::configure_l4s(dualpi2_config cfg, unsigned int seed)
 {
     l4s_cfg = cfg;
     l4s_queue.configure(cfg);
+    l4s_queue.seed_rng(seed);
 }
 
 dualpi2_stats ip_buffer::get_l4s_stats() const
@@ -220,8 +224,9 @@ bool ip_buffer::pop_aqm_dropped_pkt(harq_pkt& out_pkt)
     out_pkt.current_t = current_t;
     out_pkt.t_out = current_t;
     out_pkt.pkts.push_back(std::move(pkt));
+    if (out_pkt.bits > current_size)
+        throw std::logic_error("IP buffer bit accounting underflow");
     current_size -= out_pkt.bits;
-    if(current_size < 0.0f) current_size = 0.0f;
     return true;
 }
 

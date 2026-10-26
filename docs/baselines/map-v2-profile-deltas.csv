@@ -1,0 +1,11 @@
+profile,direction,legacy_throughput_mbps,candidate_throughput_mbps,throughput_delta_pct,legacy_mean_sinr_db,candidate_mean_sinr_db,sinr_delta_db,legacy_outage_ues,candidate_outage_ues,legacy_zero_throughput_ues,candidate_zero_throughput_ues,legacy_error_mbps,candidate_error_mbps
+offline_indoor_hotspot_n78_pedestrian,dl,46.778,47.837,2.26,21.577,22.358,0.781,0,0,0,0,18.22,17.16
+offline_indoor_hotspot_n78_pedestrian,ul,51.137,47.622,-6.88,31.655,32.528,0.872,0,0,0,0,38.758,42.273
+offline_rural_n78_vehicular,dl,50.81,62.25,22.51,-4.464,-1.361,3.103,2,0,1,0,69.033,57.572
+offline_rural_n78_vehicular,ul,25.078,27.489,9.62,2.451,4.998,2.548,0,0,0,0,94.61,89.02
+offline_uma_n78_pedestrian,dl,112.916,108.731,-3.71,-0.994,-1.821,-0.827,5,5,3,4,66.931,71.12
+offline_uma_n78_pedestrian,ul,14.362,14.308,-0.38,7.01,6.174,-0.836,2,1,5,6,55.509,55.567
+offline_umi_n258_fwa,dl,499.983,499.983,-0.0,60.481,60.273,-0.207,0,0,0,0,0.0,0.0
+offline_umi_n258_fwa,ul,156.586,156.534,-0.03,59.754,59.558,-0.196,0,0,0,0,43.239,43.292
+offline_umi_n40_npn,dl,48.19,48.285,0.2,27.013,27.963,0.951,0,0,0,0,1.787,1.702
+offline_umi_n40_npn,ul,24.736,24.193,-2.19,36.489,37.477,0.988,0,0,0,0,10.203,10.77

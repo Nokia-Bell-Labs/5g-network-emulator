@@ -49,6 +49,7 @@ generate_plots() {
     if [[ "${ALL_PLOTS}" -eq 1 ]]; then
         ue_args+=("-a")
     fi
+    ue_args+=("--config" "${CONFIG_FILE}")
     if ! fikore_python "${DRAW_UE}" "${ue_args[@]}"; then
         echo "[WARN] Skipping UE plots. Check optional Python dependencies (for example matplotlib)." >&2
         return 0

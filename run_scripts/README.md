@@ -13,8 +13,9 @@ The lab and the emulator config are separate concerns:
 - [run_fikore_nfqueue_lab.sh](run_fikore_nfqueue_lab.sh): creates, reuses, inspects, and tears down the lab topology, then launches FikoRE on top of it.
 - [run_docker.sh](run_docker.sh): builds or launches the helper container for Docker backends.
 - [run_offline.sh](run_offline.sh): runs an offline simulation from a positional config file and then generates plots from the latest logs. By default it keeps only the general offline plots; pass `-a` to also generate DualQ/L4S/NFQUEUE-specific plots.
+- [run_iperf.sh](run_iperf.sh): runs an offline iperf-shaped session through `fikore-iperf3`. It creates `transport/.venv` on first use and forwards every argument.
 - [run_emulated.sh](run_emulated.sh): runs the NFQUEUE lab workflow with a positional emulation config file.
-- [run_dashboard.sh](run_dashboard.sh): activates the repository Python environment and starts the live dashboard.
+- [run_api.sh](run_api.sh): starts the control API, which serves the web dashboard on `http://localhost:8100/` and collects telemetry over UDP.
 - [python_env.sh](python_env.sh): shared Python environment helper used by the other run scripts.
 - [fikorens](fikorens): direct wrapper that opens a namespace shell without requiring `source`.
 - [fikorens-open](fikorens-open): direct wrapper that opens a namespace shell and returns when it exits.
@@ -31,6 +32,7 @@ This avoids the old destructive behavior where `run` recreated namespaces every 
 
 For real-traffic emulation, use [run_emulated.sh](run_emulated.sh) or the lab script directly.
 For offline simulated traffic, use [run_offline.sh](run_offline.sh).
+For an offline iperf-shaped session on a scenario, use [run_iperf.sh](run_iperf.sh).
 
 ## Topology
 
@@ -71,7 +73,7 @@ host <----> FikoRE container
 172.30.0.1      172.30.0.2
 ```
 
-It is only a management link. If your `.ini` emits dashboard UDP traffic from inside the container, that `.ini` must already point to a reachable host address such as `172.30.0.1:8096`.
+It is only a management link. If your `.ini` emits telemetry UDP traffic from inside the container, that `.ini` must already point to a reachable host address such as `172.30.0.1:8098`.
 
 ## Requirements
 
@@ -82,20 +84,22 @@ It is only a management link. If your `.ini` emits dashboard UDP traffic from in
 
 ## Recommended Example Config
 
-The best ready-to-use emulated example is [config/emulated_rural_n78_single_with_background.ini](/home/pablop/devel/5g-network-emulator/config/emulated_rural_n78_single_with_background.ini).
+The best ready-to-use emulated example is [`config/emulated_rural_n78_single_with_background.ini`](../config/emulated_rural_n78_single_with_background.ini).
 
 Why this file is the best default example:
 
 - it matches the lab queue plan directly with `UE1 -> 100/101`;
-- it keeps `l4s_dual_queue: true`, so it exercises the L4S / DualQ path;
+- it keeps `l4s_dual_queue: false`, so unattended baseline runs do not silently enable DualQ behavior;
 - it adds simulated background users to create load around the captured UE;
-- it already enables UDP dashboard output on `127.0.0.1:8096`.
+- it already enables UDP telemetry output on `127.0.0.1:8098`, which is where the API collector listens.
+
+Use `config/emulated_uma_n78_compare_with_background.ini` or `config/emulated_umi_n40_npn_compare_with_background.ini` when the experiment explicitly compares an L4S captured UE with a legacy captured UE.
 
 Important:
 
 - `run_fikore_nfqueue_lab.sh` does not rewrite monitoring keys anymore.
-- For `host` and `docker-host`, a dashboard on `127.0.0.1:8096` is usually fine if the `.ini` already says that.
-- For `docker-none`, the `.ini` should explicitly target the host-side management IP, typically `172.30.0.1:8096`.
+- For `host` and `docker-host`, a collector on `127.0.0.1:8098` is usually fine if the `.ini` already says that.
+- For `docker-none`, the `.ini` should explicitly target the host-side management IP, typically `172.30.0.1:8098`.
 - Adding namespaces with `ue-add` does not modify the `.ini`; FikoRE only uses UEs actually defined in the config file.
 
 ## Quick Workflow
@@ -111,10 +115,7 @@ sudo BACKEND=host UE_COUNT=2 run_scripts/run_fikore_nfqueue_lab.sh up
 sudo run_scripts/run_fikore_nfqueue_lab.sh status
 ```
 
-This creates two namespace UEs:
-
-- `ue1`: intended for the L4S path
-- `ue2`: intended for the legacy path
+This creates two namespace UEs. The selected `.ini` determines whether either captured path uses L4S; the recommended rural baseline leaves it disabled.
 
 If you need a different lab size, change `UE_COUNT` only when running `up`. Later `run` reuses the existing topology.
 
@@ -152,7 +153,7 @@ When sourced, `fikorens ue1` keeps its original "replace the current shell" beha
 Typical host-side dashboard command:
 
 ```bash
-run_scripts/run_dashboard.sh --host 0.0.0.0 --port 8096
+run_scripts/run_api.sh
 ```
 
 Make sure the `.ini` already points to the correct address for your backend.

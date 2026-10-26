@@ -24,6 +24,7 @@ struct monitoring_config
     bool emit_l4s = true;
     bool emit_mac_scheduler = true;
     bool emit_emulator_runtime = true;
+    bool emit_control = true;
     bool emit_runtime_debug_logs = false;
     bool emit_text_logs_compat = false;
     std::vector<monitoring_output_config> outputs;

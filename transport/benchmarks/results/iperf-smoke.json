@@ -1,0 +1,36 @@
+{
+  "artifact_kind": "curated_summary",
+  "fikore_revision": "325dfadd3809b2d7def25a980ef6782e1819ce48",
+  "generated_with_worktree_changes": true,
+  "runs": [
+    {
+      "bytes_conserved": true,
+      "bytes_received": 1694720,
+      "command": "PYTHONPATH=transport python3 -m fikore_transport.iperf_cli -c config/control_demo.ini --ue controlDemo_0 -t 0.2 -i 0.1 --drain-timeout 2 -J",
+      "drained": true,
+      "duration_s": 0.2,
+      "protocol": "tcp",
+      "retransmits": 0,
+      "srtt_ms": 33.73158499220497,
+      "throughput_mbps": 58.18781115879828,
+      "ue": "controlDemo_0"
+    },
+    {
+      "bytes_conserved": true,
+      "bytes_received": 124800,
+      "command": "PYTHONPATH=transport python3 -m fikore_transport.iperf_cli -c config/emulated_rural_n78_single_with_background.ini --ue capturedStudy -u -b 5M -t 0.2 -i 0.1 --drain-timeout 2 -J",
+      "datagrams_lost": 0,
+      "datagrams_sent": 104,
+      "drained": true,
+      "duration_s": 0.2,
+      "jitter_ms": 0.9022478572580583,
+      "offered_mbps": 4.992,
+      "protocol": "udp",
+      "scenario_conversion": "capturedStudy ue_type 0 to 1 in temporary INI",
+      "ue": "capturedStudy"
+    }
+  ],
+  "schema_version": 1,
+  "source_runner": "fikore_transport.iperf_cli",
+  "status": "completed"
+}

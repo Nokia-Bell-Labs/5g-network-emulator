@@ -5,7 +5,11 @@
 #include <string.h>
 #include <time.h>
 #include <arpa/inet.h>
+#include <poll.h>
 #include <pthread.h>
+
+#include <atomic>
+#include <exception>
 
 #define _BSD_SOURCE             /* See feature_test_macros(7) */
 #include <endian.h>
@@ -280,11 +284,20 @@ static int queue_cb(const struct nlmsghdr *nlh, void *data)
 	ph = (nfqnl_msg_packet_hdr*)mnl_attr_get_payload(attr[NFQA_PACKET_HDR]);
 	id = ntohl(ph->packet_id);
 
+	uint16_t plen;
+	plen = attr[NFQA_PAYLOAD] ? mnl_attr_get_payload_len(attr[NFQA_PAYLOAD]) : 0;
 	if (attr[NFQA_CAP_LEN]) {
 		orig_len = ntohl(mnl_attr_get_u32(attr[NFQA_CAP_LEN]));
 	}
 	else{
-		orig_len = nlh->nlmsg_len;
+		orig_len = plen;
+	}
+	if(orig_len == 0) {
+		nfiface->last_recv_id = id;
+		nfiface->total_recv++;
+		if(netfilter_interface_release_pkt(nfiface, id, 0) != 0)
+			std::terminate();
+		return MNL_CB_OK;
 	}
 
 	if(attr[NFQA_TIMESTAMP]) {
@@ -303,9 +316,7 @@ static int queue_cb(const struct nlmsghdr *nlh, void *data)
 	nfiface->bytes_recv += orig_len;
 
 	uint32_t skbinfo;
-	uint16_t plen;
 
-	plen = attr[NFQA_PAYLOAD] ? mnl_attr_get_payload_len(attr[NFQA_PAYLOAD]) : 0;
 	if (orig_len != plen)
 			PRINTF("truncated ");
 	void *payload = attr[NFQA_PAYLOAD] ? mnl_attr_get_payload(attr[NFQA_PAYLOAD]) : NULL;
@@ -375,29 +386,90 @@ static void *run(void *arg) {
 	for (;;) {
 		ret = mnl_socket_recvfrom(nfiface->nl, nfiface->buf, nfiface->sizeof_buf);
 		if (ret == -1) {
+			if(errno == EAGAIN || errno == EWOULDBLOCK) {
+				if(!nfiface->running.load())
+					break;
+				usleep(1000);
+				continue;
+			}
 			PERROR("mnl_socket_recvfrom");
 			nfiface->recv_fails++;
 			if(errno == ENOBUFS)
 				continue; // Do not exit in this scenario	
-			//exit(EXIT_FAILURE);
+			if(!nfiface->running.load())
+				break;
+			continue;
 		}
+		if(ret == 0)
+			continue;
 		ret = mnl_cb_run(nfiface->buf, ret, 0, nfiface->portid, queue_cb, nfiface);
 		if (ret < 0){
 			PERROR("mnl_cb_run");
 			//exit(EXIT_FAILURE);
 		}
 	}
-
+	return NULL;
 }
 
 
 static void netfilter_interface_free(netfilter_interface_t *iface) {
 	if(iface) {
-		mnl_socket_close(iface->nl);
+		if(iface->nl)
+			mnl_socket_close(iface->nl);
 		if(iface->buf)
-			delete(iface->buf);
+			free(iface->buf);
+		pthread_mutex_destroy(&iface->verdict_mutex);
 		delete(iface);
 	}
+}
+
+static int send_config_and_wait_ack(
+	netfilter_interface_t *nfiface,
+	struct nlmsghdr *nlh)
+{
+	static std::atomic<uint32_t> next_sequence(1);
+	const uint32_t sequence = next_sequence.fetch_add(1);
+	nlh->nlmsg_flags |= NLM_F_ACK;
+	nlh->nlmsg_seq = sequence;
+	if (mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len) < 0) {
+		PERROR("mnl_socket_send");
+		return -1;
+	}
+
+	struct pollfd descriptor;
+	descriptor.fd = mnl_socket_get_fd(nfiface->nl);
+	descriptor.events = POLLIN;
+	descriptor.revents = 0;
+	int ready;
+	do {
+		ready = poll(&descriptor, 1, 2000);
+	} while (ready < 0 && errno == EINTR);
+	if (ready <= 0) {
+		if (ready == 0)
+			errno = ETIMEDOUT;
+		PERROR("netfilter config acknowledgement");
+		return -1;
+	}
+
+	const int received = mnl_socket_recvfrom(
+		nfiface->nl,
+		nfiface->buf,
+		nfiface->sizeof_buf);
+	if (received < 0) {
+		PERROR("mnl_socket_recvfrom");
+		return -1;
+	}
+	if (mnl_cb_run(
+			nfiface->buf,
+			received,
+			sequence,
+			nfiface->portid,
+			NULL,
+			NULL) < 0) {
+		PERROR("netfilter config rejected");
+		return -1;
+	}
+	return 0;
 }
 
 void cb(void* handler, netfilter_interface_t *nfiface, const nfq_packet_metadata& meta)
@@ -416,11 +488,20 @@ netfilter_interface_t *netfilter_interface_open(int queue_num, add_pkt_callback_
 	nfiface->callback = callback;
 	nfiface->callback_data = handler;
 	nfiface->buf = NULL;
+	nfiface->nl = NULL;
+	nfiface->thread_started = false;
+	nfiface->running.store(false);
+	pthread_mutex_init(&nfiface->verdict_mutex, NULL);
 	/* largest possible packet payload, plus netlink data overhead: */
 	nfiface->sizeof_buf = 0xffff + (MNL_SOCKET_BUFFER_SIZE/2);;
 
-	nfiface->last_recv_id = nfiface->total_recv = nfiface->last_rlsd_id = nfiface->total_rlsd = 0;
-	nfiface->bytes_recv = nfiface->recv_fails = nfiface->rlsd_fails = 0;
+	nfiface->last_recv_id.store(0);
+	nfiface->total_recv.store(0);
+	nfiface->last_rlsd_id.store(0);
+	nfiface->total_rlsd.store(0);
+	nfiface->bytes_recv.store(0);
+	nfiface->recv_fails.store(0);
+	nfiface->rlsd_fails.store(0);
 
 	nfiface->nl = mnl_socket_open2(NETLINK_NETFILTER, SOCK_NONBLOCK);
 	if (nfiface->nl == NULL) {
@@ -447,8 +528,7 @@ netfilter_interface_t *netfilter_interface_open(int queue_num, add_pkt_callback_
 	nlh = nfq_nlmsg_put(nfiface->buf, NFQNL_MSG_CONFIG, nfiface->queue_num);
 	nfq_nlmsg_cfg_put_cmd(nlh, AF_INET, NFQNL_CFG_CMD_BIND);
 
-	if (mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len) < 0) {
-		PERROR("mnl_socket_send");
+	if (send_config_and_wait_ack(nfiface, nlh) < 0) {
 		netfilter_interface_free(nfiface);
 		return NULL;
 	}	
@@ -461,30 +541,37 @@ netfilter_interface_t *netfilter_interface_open(int queue_num, add_pkt_callback_
 	 * between payload replacement and skb offload metadata.
 	 */
 
-	if (mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len) < 0) {
-		PERROR("mnl_socket_send");
+	if (send_config_and_wait_ack(nfiface, nlh) < 0) {
 		netfilter_interface_free(nfiface);
 		return NULL;
 	}
 	
+	nfiface->running.store(true);
 	ret = pthread_create(&nfiface->tid, NULL, &run, nfiface);
 
 	if(ret) {
 		PERROR("pthread_create");
+		nfiface->running.store(false);
 		netfilter_interface_free(nfiface);
 		return NULL;
 	}
+	nfiface->thread_started = true;
 	return nfiface;
 }
 
 
 int netfilter_interface_release_pkt(netfilter_interface_t *nfiface, uint32_t pkt_id, int accept) {
+	if(nfiface == NULL || nfiface->nl == NULL)
+		return -1;
 	char buf[MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *nlh;
 	nlh = nfq_nlmsg_put(buf, NFQNL_MSG_VERDICT, nfiface->queue_num);
 	nfq_nlmsg_verdict_put(nlh, pkt_id, accept ? NF_ACCEPT : NF_DROP);
 
-	if (mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len) < 0) {
+	pthread_mutex_lock(&nfiface->verdict_mutex);
+	int send_result = mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len);
+	pthread_mutex_unlock(&nfiface->verdict_mutex);
+	if (send_result < 0) {
 		PERROR("mnl_socket_send");
 		nfiface->rlsd_fails++;
 		return -1;
@@ -497,6 +584,8 @@ int netfilter_interface_release_pkt(netfilter_interface_t *nfiface, uint32_t pkt
 }
 
 int netfilter_interface_release_pkt_payload(netfilter_interface_t *nfiface, uint32_t pkt_id, int accept, const uint8_t *payload, uint32_t payload_len) {
+	if(nfiface == NULL || nfiface->nl == NULL)
+		return -1;
 	char buf[0xffff + MNL_SOCKET_BUFFER_SIZE];
 	struct nlmsghdr *nlh;
 	nlh = nfq_nlmsg_put(buf, NFQNL_MSG_VERDICT, nfiface->queue_num);
@@ -505,7 +594,10 @@ int netfilter_interface_release_pkt_payload(netfilter_interface_t *nfiface, uint
 		nfq_nlmsg_verdict_put_pkt(nlh, payload, payload_len);
 	}
 
-	if (mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len) < 0) {
+	pthread_mutex_lock(&nfiface->verdict_mutex);
+	int send_result = mnl_socket_sendto(nfiface->nl, nlh, nlh->nlmsg_len);
+	pthread_mutex_unlock(&nfiface->verdict_mutex);
+	if (send_result < 0) {
 		PERROR("mnl_socket_send");
 		nfiface->rlsd_fails++;
 		return -1;
@@ -517,9 +609,20 @@ int netfilter_interface_release_pkt_payload(netfilter_interface_t *nfiface, uint
 	return 0;
 }
 
-void netfilter_interface_close(netfilter_interface_t *nfiface) {
+void netfilter_interface_stop(netfilter_interface_t *nfiface) {
+	if(nfiface == NULL)
+		return;
+	nfiface->running.store(false);
+	if(nfiface->thread_started) {
+		pthread_join(nfiface->tid, NULL);
+		nfiface->thread_started = false;
+	}
+}
 
-	pthread_cancel(nfiface->tid);
+void netfilter_interface_close(netfilter_interface_t *nfiface) {
+	if(nfiface == NULL)
+		return;
+	netfilter_interface_stop(nfiface);
 	netfilter_interface_free(nfiface);
 
 }

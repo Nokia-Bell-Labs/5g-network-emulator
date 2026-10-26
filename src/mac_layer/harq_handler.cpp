@@ -5,79 +5,113 @@
 **********************************************/
 
 #include <mac_layer/harq_handler.h>
+#include <phy_layer/phy_l_definitions.h>
 
-harq_handler::harq_handler(int _max_rtx, float _air_delay, 
-                 float _rtx_period, float _rtx_period_var, 
-                 float _rtx_p_delay, float _rtx_p_delay_var, int _verbosity)
-            :generator(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count())
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
+#include <utility>
+
+namespace
 {
-    max_rtx = _max_rtx; 
-    air_delay = _air_delay;
-    stchstc_air = !(air_delay == 0);
-    rtx_p_delay = _rtx_p_delay;
-    rtx_p_delay_var = _rtx_p_delay_var;
-    rtx_period = _rtx_period;
-    rtx_period_var = _rtx_period_var;
-    stchstc_delay = !(rtx_p_delay_var == 0)||!(rtx_period_var == 0);
-    verbosity = 0; 
+std::uint32_t derived_seed(std::uint32_t base, std::uint32_t stream)
+{
+    std::seed_seq sequence{base, stream, 0x9e3779b9U};
+    std::array<std::uint32_t, 1> output{};
+    sequence.generate(output.begin(), output.end());
+    return output[0];
 }
+
+int checked_rbg_index(int rbg_prbs)
+{
+    for (int index = 0; index < 5; index++)
+    {
+        if (RBG_S[index] == rbg_prbs)
+            return index;
+    }
+    throw std::out_of_range(
+        "legacy_bler requires an RBG size of 1, 2, 4, 8, or 16 PRBs");
+}
+} // namespace
+
+harq_handler::harq_handler(int _max_rtx, float _air_delay,
+                 float _rtx_period, float _rtx_period_var,
+                 float _rtx_p_delay, float _rtx_p_delay_var,
+                 unsigned int _seed, int _verbosity,
+                 harq_model _model, std::size_t _max_queue_blocks)
+    : max_rtx(_max_rtx),
+      air_delay_var(_air_delay),
+      rtx_p_delay(_rtx_p_delay),
+      rtx_p_delay_var(_rtx_p_delay_var),
+      rtx_period(_rtx_period),
+      rtx_period_var(_rtx_period_var),
+      verbosity(_verbosity),
+      model(_model),
+      max_queue_blocks(_max_queue_blocks),
+      bler_generator(derived_seed(_seed, 0x48415251U)),
+      air_delay_generator(derived_seed(_seed, 0x41495244U)),
+      rtx_period_generator(derived_seed(_seed, 0x52545850U)),
+      processing_delay_generator(derived_seed(_seed, 0x50524f43U))
+{
+    if (max_rtx < 0)
+        throw std::invalid_argument("max_rtx must be non-negative");
+    if (max_queue_blocks == 0)
+        throw std::invalid_argument("HARQ queue capacity must be positive");
+    for (float value : {
+             air_delay_var,
+             rtx_period,
+             rtx_period_var,
+             rtx_p_delay,
+             rtx_p_delay_var})
+    {
+        if (!std::isfinite(value) || value < 0.0f)
+            throw std::invalid_argument(
+                "HARQ delays must be finite and non-negative seconds");
+    }
+}
+
 void harq_handler::step(float t)
 {
-    current_t = t; 
+    if (!std::isfinite(t))
+        throw std::invalid_argument("HARQ time must be finite");
+    current_t = t;
 }
 
-int harq_handler::get_rtx_mbits()
+bool harq_handler::enqueue_retry(
+    harq_pkt &pkt,
+    float distance,
+    int retry_ordinal)
 {
-    return rtx_mbit; 
-}
-
-void harq_handler::queue(harq_pkt pkt, float distance)
-{
-    rtx_mbit += pkt.bits*BIT2MBIT; 
-    pkt.n_tx++; 
-    pkt.set_delay(emulate_ack_delay(distance));
+    if (harq_buffer.size() >= max_queue_blocks)
+        return false;
+    if (!std::isfinite(distance) || distance < 0.0f)
+        throw std::invalid_argument(
+            "HARQ distance must be finite and non-negative");
+    if (retry_ordinal < 1 || retry_ordinal > max_rtx)
+        throw std::out_of_range(
+            "HARQ retry ordinal is outside configured max_rtx");
+    pkt.attempt_ordinal = retry_ordinal;
+    pkt.distance = distance;
+    pkt.t_out = current_t + emulate_ack_delay(distance);
     harq_buffer.push_back(std::move(pkt));
-    if(harq_buffer.size() >= 1)
-    {
-        oldest_t = pkt.current_t; 
-        t_out = pkt.t_out; 
-    } 
+    high_water_blocks = std::max(high_water_blocks, harq_buffer.size());
+    return true;
 }
 
-void harq_handler:: add_pkts(harq_pkt pkt)
+bool harq_handler::is_pkt_ready() const
 {
-    pkt.set_delay(emulate_ack_delay(pkt.distance));
-    harq_buffer.push_back(std::move(pkt));
-    if(harq_buffer.size() >= 1)
-    {
-        oldest_t = pkt.current_t; 
-        t_out = pkt.t_out; 
-    } 
-}
-
-bool harq_handler::is_pkt_ready()
-{
-    if(harq_buffer.size() > 0)  return (harq_buffer.size() > 0 && t_out <= current_t);
-    else return false; 
+    return !harq_buffer.empty() && harq_buffer.front().t_out <= current_t;
 }
 
 harq_pkt harq_handler::get_pkt()
 {
-	
-    assert(is_pkt_ready());
-    harq_pkt pkt = harq_buffer.front();
-    if(harq_buffer.size() > 1)
-    {
-        harq_buffer.pop_front();
-        oldest_t = harq_buffer.front().current_t; 
-        t_out = harq_buffer.front().t_out; 
-    }
-    else
-    {
-        t_out = INF; 
-        harq_buffer.pop_front();
-    }
-    return std::move(pkt); 
+    if (!is_pkt_ready())
+        throw std::logic_error("no HARQ block is ready");
+    harq_pkt pkt = std::move(harq_buffer.front());
+    harq_buffer.pop_front();
+    return pkt;
 }
 
 bool harq_handler::pop_pkt_older_than(float oldest_allowed_ip_t, harq_pkt& out_pkt)
@@ -86,33 +120,19 @@ bool harq_handler::pop_pkt_older_than(float oldest_allowed_ip_t, harq_pkt& out_p
     {
         if(it->ip_t >= oldest_allowed_ip_t) continue;
 
-        rtx_mbit -= it->bits * BIT2MBIT;
-        if(rtx_mbit < 0) rtx_mbit = 0;
-
         out_pkt = std::move(*it);
         harq_buffer.erase(it);
-
-        if(!harq_buffer.empty())
-        {
-            oldest_t = harq_buffer.front().current_t;
-            t_out = harq_buffer.front().t_out;
-        }
-        else
-        {
-            oldest_t = current_t;
-            t_out = INF;
-        }
-
         return true;
     }
 
     return false;
 }
 
-float harq_handler::get_oldest_t()
+float harq_handler::get_oldest_t() const
 {
-    if(harq_buffer.size() > 0) return oldest_t; 
-    else return current_t; 
+    return harq_buffer.empty()
+               ? current_t
+               : harq_buffer.front().current_t;
 }
 
 const harq_pkt* harq_handler::peek_oldest() const
@@ -121,43 +141,132 @@ const harq_pkt* harq_handler::peek_oldest() const
     return &harq_buffer.front();
 }
 
+std::uint64_t harq_handler::queued_bits() const
+{
+    std::uint64_t bits = 0;
+    for (const harq_pkt &pkt : harq_buffer)
+    {
+        if (pkt.bits
+            > std::numeric_limits<std::uint64_t>::max() - bits)
+            throw std::overflow_error("HARQ queued bit count overflow");
+        bits += pkt.bits;
+    }
+    return bits;
+}
+
 float harq_handler::emulate_ack_delay(float distance)
 {
-    float tx_delay = 2 * distance / SPEED_OF_LIGHT; 
-    if(stchstc_air) tx_delay += rtx_period + rtx_period_var*rtx_period_dist(generator);
-    else tx_delay += rtx_period ; 
-    if(stchstc_delay) tx_delay += rtx_p_delay + rtx_p_delay_var * p_delay_dist(generator); 
-    else tx_delay += rtx_p_delay; 
-    return tx_delay; 
+    const float propagation = std::max(
+        0.0f,
+        static_cast<float>(2.0 * distance / SPEED_OF_LIGHT)
+            + air_delay_var * signed_unit(air_delay_generator));
+    const float feedback = std::max(
+        0.0f,
+        rtx_period
+            + rtx_period_var * signed_unit(rtx_period_generator));
+    const float processing = std::max(
+        0.0f,
+        rtx_p_delay
+            + rtx_p_delay_var
+                * signed_unit(processing_delay_generator));
+    return propagation + feedback + processing;
 }
 
-void harq_handler::init(int _mod_i, int _layers, int _logic_units)
+void harq_handler::init(int _mod_i, int _rbg_prbs)
 {
-    rbg_i = GET_RBG_INDEX(_logic_units);
-    mod_i = _mod_i; 
-    l_i = _layers - 1; 
-    logic_units = _logic_units;
+    if (_mod_i < 0 || _mod_i >= 2)
+        throw std::out_of_range(
+            "legacy_bler modulation index must be 0 or 1");
+    (void)checked_rbg_index(_rbg_prbs);
+    mod_i = _mod_i;
+    rbg_prbs = _rbg_prbs;
+    lookup_context_initialized = true;
 }
 
-#if 0
-bool harq_handler::get_rtx(int mcs, float sinr, int n_tx)
+double harq_handler::legacy_bler(
+    int modulation_index,
+    int rbg_prbs,
+    int layers,
+    int mcs,
+    float sinr)
 {
-    int sinr_i = SINR_TO_INDEX(sinr);
-    double bler = BLER_MCS_SINR[mod_i][rbg_i][l_i][mcs][sinr_i];     
-    double success = std::pow(1-bler, n_tx + 1);
-    // Not necessary, we already estimate the BLER for the entire block
-    //success = pow(success, logic_units);
-    double error = (1 - success)*std::pow((1-ERROR_RED_HARQ), n_tx-1);
-    //std::cout << "ERROR: " << error << " sinr: " << sinr << " bler: " << bler << " mcs: " << mcs << std::endl; 
-    return rtx_prob(generator) <= error; 
+    if (modulation_index < 0 || modulation_index >= 2)
+        throw std::out_of_range(
+            "legacy_bler modulation index must be 0 or 1");
+    const int rbg_index = checked_rbg_index(rbg_prbs);
+    if (layers < 1 || layers > 4)
+        throw std::out_of_range(
+            "legacy_bler supports one through four layers");
+    if (mcs < 0 || mcs >= 28)
+        throw std::out_of_range(
+            "legacy_bler supports MCS indexes 0 through 27");
+    if (!std::isfinite(sinr))
+        throw std::invalid_argument("legacy_bler SINR must be finite");
+    const int sinr_index = SINR_TO_INDEX(sinr);
+    const double bler = LEGACY_BLER_MCS_SINR[
+        modulation_index][rbg_index][layers - 1][mcs][sinr_index];
+    if (!std::isfinite(bler) || bler < 0.0 || bler > 1.0)
+        throw std::runtime_error(
+            "legacy_bler table contains an invalid probability");
+    return bler;
 }
 
-bool harq_handler::get_rtx()
+double harq_handler::legacy_failure_probability(
+    double bler,
+    int attempt_ordinal)
 {
-    return rtx_prob(generator) <= TARGET_BLER; 
+    if (!std::isfinite(bler))
+        throw std::invalid_argument("BLER must be finite");
+    if (attempt_ordinal < 0)
+        throw std::out_of_range(
+            "HARQ attempt ordinal must be non-negative");
+    const double bounded_bler = std::clamp(bler, 0.0, 1.0);
+    const double success =
+        std::pow(1.0 - bounded_bler, attempt_ordinal + 1);
+    const double failure =
+        (1.0 - success) * std::pow(0.8, attempt_ordinal - 1);
+    return std::clamp(failure, 0.0, 1.0);
 }
-#else
-bool harq_handler::get_rtx(int mcs, float sinr, int n_tx) { return 0; }
 
-bool harq_handler::get_rtx() { return 0; }
-#endif
+double harq_handler::draw_outcome()
+{
+    if (!scripted_outcomes.empty())
+    {
+        const double outcome = scripted_outcomes.front();
+        scripted_outcomes.pop_front();
+        return outcome;
+    }
+    return unit_probability(bler_generator);
+}
+
+bool harq_handler::get_rtx(
+    int mcs,
+    float sinr,
+    int attempt_ordinal,
+    int layers)
+{
+    if (model == harq_model::disabled)
+        return false;
+    if (!lookup_context_initialized)
+        throw std::logic_error(
+            "legacy_bler lookup context was not initialized");
+    const double probability = legacy_failure_probability(
+        legacy_bler(mod_i, rbg_prbs, layers, mcs, sinr),
+        attempt_ordinal);
+    return probability > 0.0 && draw_outcome() <= probability;
+}
+
+void harq_handler::set_scripted_outcomes(
+    const std::vector<double> &outcomes)
+{
+    scripted_outcomes.clear();
+    for (double outcome : outcomes)
+    {
+        if (!std::isfinite(outcome)
+            || outcome < 0.0
+            || outcome > 1.0)
+            throw std::invalid_argument(
+                "scripted HARQ outcomes must be in [0, 1]");
+        scripted_outcomes.push_back(outcome);
+    }
+}

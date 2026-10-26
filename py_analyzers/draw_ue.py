@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 import re
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 from glob import glob
 
 TIMESTAMP_DIR_RE = re.compile(r"^\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}$")
@@ -97,8 +99,56 @@ def parse_log_file_with_tx(file_path):
     return data
 
 
-def plot_combined_trajectory(all_data, outdir):
+def map_path_from_config(config_path):
+    in_scenario = False
+    with open(config_path, 'r') as config:
+        for line in config:
+            line = line.strip()
+            if line.startswith('[') and line.endswith(']'):
+                in_scenario = line == '[Scenario]'
+                continue
+            if in_scenario and line.startswith('map_file:'):
+                map_path = line.split(':', 1)[1].strip()
+                return map_path if os.path.isabs(map_path) else os.path.abspath(map_path)
+    raise ValueError(f"No map_file found in [Scenario] of {config_path}")
+
+
+def load_fading_map(config_path):
+    with open(map_path_from_config(config_path), 'r') as map_handle:
+        fading_map = json.load(map_handle)
+    values = np.asarray(fading_map['map'], dtype=float)
+    if values.ndim != 2 or values.size == 0:
+        raise ValueError("Fading map has no two-dimensional data")
+    cell_size = float(fading_map['cell_size'])
+    return values, cell_size
+
+
+def dashboard_fading_cmap():
+    values = np.linspace(0.0, 1.0, 256)
+    colours = np.column_stack((
+        np.clip(1.6 * values - 0.3, 0.0, 1.0),
+        np.clip(1.4 * values - 0.1, 0.0, 1.0),
+        np.clip(0.9 - 1.1 * values, 0.0, 1.0),
+    ))
+    return ListedColormap(colours)
+
+
+def plot_combined_trajectory(all_data, outdir, config_path):
     plt.figure(figsize=(10, 10))
+    axis = plt.gca()
+    fading_map, cell_size = load_fading_map(config_path)
+    side = cell_size * fading_map.shape[0]
+    low, high = np.percentile(fading_map, (1, 99))
+    image = axis.imshow(
+        fading_map,
+        extent=(-side / 2, side / 2, -side / 2, side / 2),
+        origin='upper',
+        cmap=dashboard_fading_cmap(),
+        vmin=low,
+        vmax=high,
+        alpha=0.45,
+    )
+    plt.colorbar(image, ax=axis, label='Fading map (dB, 1st–99th percentile)')
     cmap = plt.get_cmap("tab10")
     for i, data in enumerate(all_data):
         x, y = data['x'], data['y']
@@ -111,9 +161,11 @@ def plot_combined_trajectory(all_data, outdir):
         plt.plot(x[-1], y[-1], 's', color=cmap(i % cmap.N))
     plt.plot(0, 0, 'kp', label='Base Station', markersize=10)
     plt.axis('equal')
+    plt.xlabel('x (m)')
+    plt.ylabel('y (m)')
     plt.grid(True)
     plt.legend()
-    plt.title("UE Trajectories")
+    plt.title("UE Trajectories Over Fading Map")
     plt.tight_layout()
     path = os.path.join(outdir, "trajectory.png")
     plt.savefig(path)
@@ -308,6 +360,11 @@ def parse_args():
         action="store_true",
         help="include DualQ/L4S/NFQUEUE-specific plots in addition to the general ones",
     )
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="INI file used for the simulation",
+    )
     return parser.parse_args()
 
 
@@ -321,7 +378,7 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
 
     all_data = [parse_log_file_with_tx(f) for f in log_files]
-    plot_combined_trajectory(all_data, out_dir)
+    plot_combined_trajectory(all_data, out_dir, args.config)
 
     plot_histograms_ul_dl(all_data, 'sinr_ul', 'sinr_dl', 'SINR Histogram', 'SINR (dB)', 'sinr_hist_ul_dl.png', bins=40, outdir=out_dir)
     plot_histograms_ul_dl(all_data, 'rsrp_ul', 'rsrp_dl', 'RSRP Histogram', 'RSRP (dBm)', 'rsrp_hist_ul_dl.png', bins=40, outdir=out_dir)

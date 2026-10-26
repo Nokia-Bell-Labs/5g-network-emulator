@@ -1,0 +1,25 @@
+{
+  "artifact_kind": "generated_result",
+  "fikore_revision": "b064e2a52c0b925820bf14e3e26a6d28e6afeca8",
+  "ns_py": {
+    "cubic_ack_steps": 1000,
+    "cubic_max_cwnd_error_bytes": 0.0,
+    "reno_ack_steps": 500,
+    "revision": "0e9011523a668a8d3d79139cf42cff65643dffa4"
+  },
+  "prague": {
+    "initial_cwnd": 15000.0,
+    "packet_size": 1500,
+    "reference": "L4STeam/udp_prague prague_cc.cpp through C ABI shim",
+    "state": "init"
+  },
+  "regeneration_command": "PYTHONPATH=transport python3 transport/benchmarks/validate_tcp_references.py --ns-root <NS_PY_CHECKOUT> --output <OUTPUT_JSON>",
+  "source_runner": "transport/benchmarks/validate_tcp_references.py",
+  "standards": {
+    "cubic_ack_count": 215.9593996328711,
+    "cubic_rfc": "RFC 8312/9438, windows in MSS, C=0.4, beta=0.7",
+    "cubic_target_packets_at_1_05_s": 100.46305,
+    "reno_rfc": "RFC 5681",
+    "rto_rfc": "RFC 6298 with Linux 200 ms floor"
+  }
+}

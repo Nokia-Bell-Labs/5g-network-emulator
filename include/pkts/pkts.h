@@ -8,8 +8,6 @@
 
 #include <deque>
 #include <cstdint>
-#include <cmath>
-#define BIT_ROUND_MARGIN 0.99f
 
 enum ecn_codepoint
 {
@@ -21,7 +19,14 @@ enum ecn_codepoint
 
 struct ip_pkt
 {
-    ip_pkt(float _current_t, float _size, float _original_size, int _prev_uid, int _uid, float _backhaul_d, float _backhaul_d_var)
+    ip_pkt(
+        float _current_t,
+        std::uint64_t _size,
+        std::uint64_t _original_size,
+        int _prev_uid,
+        int _uid,
+        float _backhaul_d,
+        float _backhaul_d_var)
     {
         current_t = _current_t; 
         ip_t = _current_t; 
@@ -35,7 +40,13 @@ struct ip_pkt
         t_out = current_t;  
     };
 
-    ip_pkt(float _current_t, float _size, float _original_size, int _uid, float _backhaul_d, float _backhaul_d_var)
+    ip_pkt(
+        float _current_t,
+        std::uint64_t _size,
+        std::uint64_t _original_size,
+        int _uid,
+        float _backhaul_d,
+        float _backhaul_d_var)
     {
         current_t = _current_t; 
         ip_t = _current_t; 
@@ -69,18 +80,19 @@ struct ip_pkt
         original_ecn = cpy_pkt.original_ecn;
         ce_marked = cpy_pkt.ce_marked;
         aqm_dropped = cpy_pkt.aqm_dropped;
+        tag = cpy_pkt.tag;
     };
 
-    bool is_ready()
+    bool is_ready() const
     {
-        return fabs(size - original_size) <= BIT_ROUND_MARGIN;  
+        return size == original_size;
     }
 
     float current_t; 
     float ip_t; 
     float t_out; 
-    float size; 
-    float original_size; 
+    std::uint64_t size;
+    std::uint64_t original_size;
     uint32_t uid; 
     uint32_t prev_uid; 
     bool is_fragment;
@@ -94,6 +106,10 @@ struct ip_pkt
     uint8_t original_ecn = ECN_NOT_ECT;
     bool ce_marked = false;
     bool aqm_dropped = false;
+    // Object this packet belongs to, chosen by whoever injected it. 0 is traffic from
+    // the generator. The emulator never interprets it: it only reports what happened to
+    // the bits carrying each value. Fragments inherit it through the copy constructor.
+    uint32_t tag = 0;
 };
 
 
@@ -105,7 +121,15 @@ static bool sorter(ip_pkt & lval, ip_pkt & rval)
 // HARQ packet which includes full and/or fragments of IP packets
 struct harq_pkt
 {
-    harq_pkt(int _id, float _ip_t, float c_t, float mcs, int _distance, float _bits, float _backhaul_d, float _backhaul_d_var)
+    harq_pkt(
+        int _id,
+        float _ip_t,
+        float c_t,
+        int mcs,
+        float _distance,
+        std::uint64_t _bits,
+        float _backhaul_d,
+        float _backhaul_d_var)
     {
         id = _id; 
         current_t = c_t; 
@@ -113,7 +137,7 @@ struct harq_pkt
         t_out = c_t; 
         distance = _distance; 
         mcs_i = mcs; 
-        n_tx = 0; 
+        attempt_ordinal = 0;
         dropped = false; 
         bits = _bits;
         backhaul_d = _backhaul_d; 
@@ -134,12 +158,13 @@ struct harq_pkt
     float current_t = 0.0; 
     float distance = 0.0;
     bool dropped = false; 
-    int n_tx = 0; 
+    int attempt_ordinal = 0;
     float t_out = 0.0; 
     int mcs_i = -1; 
-    float bits = 0.0; 
+    int layers = 1;
+    std::uint64_t bits = 0;
     float backhaul_d = 0.0; 
     float backhaul_d_var = 0.0; 
-    int id; 
+    int id = -1;
     std::deque<ip_pkt> pkts;
 };

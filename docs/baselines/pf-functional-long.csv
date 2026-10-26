@@ -1,0 +1,13 @@
+grid,ues,time_mode,frequency_mode,reranking,decisions_per_tti,us_per_tti,us_per_tti_p50,us_per_tti_p95,us_per_tti_p99,us_per_tti_max,compute_budget_exceedance_pct,dl_total_mbps,ul_total_mbps,dl_jain,ul_jain,dl_max_service_gap_ttis,ul_max_service_gap_ttis
+20mhz_mu1,64,localized,grouped,none,6,104.34,104.34,156.678,173.557,385.863,0.0,66.758,29.479,0.99899,0.99856,96,169
+20mhz_mu1,64,localized,grouped,allocation_unit,6,109.25,109.25,162.998,181.234,378.068,0.0,66.731,37.064,0.99988,0.9999,18,31
+20mhz_mu1,64,distributed,per_rb,none,100,548.673,548.673,811.603,936.607,1133.31,0.05,69.514,26.642,0.99899,0.9996,96,92
+20mhz_mu1,64,distributed,per_rb,allocation_unit,100,560.235,560.235,830.141,971.698,1138.68,0.55,69.514,38.584,1,1,2,4
+100mhz_mu1,64,localized,grouped,none,17,186.274,186.274,321.159,346.534,497.262,0.0,378.18,94.223,0.999,0.99855,96,169
+100mhz_mu1,64,localized,grouped,allocation_unit,17,209.678,209.678,350.033,378.584,641.302,0.0,378.194,208.948,1.0,0.99999,6,14
+100mhz_mu1,64,distributed,per_rb,none,546,3302.995,3302.995,4727.023,5297.833,6085.66,100.0,379.551,73.082,0.999,0.9996,96,92
+100mhz_mu1,64,distributed,per_rb,allocation_unit,546,4145.94,4145.94,5966.954,6778.134,7355.36,100.0,379.542,210.684,1,1,1,3
+400mhz_mu3,64,localized,grouped,none,15,219.727,219.727,322.694,354.246,509.295,0.0,1245.61,169.865,0.99938,0.99849,81,82
+400mhz_mu3,64,localized,grouped,allocation_unit,15,249.172,249.172,354.947,374.343,516.778,0.0,1245.51,534.323,1.0,1.0,6,6
+400mhz_mu3,64,distributed,per_rb,none,2000,11006.0,11006.0,12816.27,13492.695,16929.3,100.0,1232.42,122.173,0.99965,0.99947,83,46
+400mhz_mu3,64,distributed,per_rb,allocation_unit,2000,11978.75,11978.75,14133.68,14954.933,16559.5,100.0,1232.43,635.808,1,0.99999,0,1

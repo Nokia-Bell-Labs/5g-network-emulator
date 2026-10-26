@@ -1,0 +1,46 @@
+{
+  "failed_cases": 0,
+  "grids": {
+    "100mhz_mu1": [
+      100000000,
+      1
+    ],
+    "20mhz_mu1": [
+      20000000,
+      1
+    ],
+    "400mhz_mu3": [
+      400000000,
+      3
+    ]
+  },
+  "host": {
+    "hostname": "pitahaya",
+    "platform": "Linux-5.15.0-58-generic-x86_64-with-glibc2.35",
+    "python": "3.10.4"
+  },
+  "modes": [
+    [
+      1,
+      0
+    ],
+    [
+      0,
+      1
+    ]
+  ],
+  "repeats": 10,
+  "schema_version": 1,
+  "source_dirty": false,
+  "source_sha": "1b55ca191e27a368936476fff33fc622833d8d13",
+  "steps": 100,
+  "timing_samples_per_case": 1000,
+  "timing_unit": "individual warmed-up TTI",
+  "ue_counts": [
+    1,
+    16,
+    64,
+    256
+  ],
+  "warmup_steps": 20
+}

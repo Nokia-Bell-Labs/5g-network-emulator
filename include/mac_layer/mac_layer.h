@@ -68,4 +68,5 @@ private:
     int bandwidth; 
     bool log;   
     int verbosity = 0;    
+    std::vector<ue> *ue_list_v = nullptr;
 };

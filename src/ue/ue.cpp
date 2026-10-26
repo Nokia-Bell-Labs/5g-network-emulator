@@ -105,6 +105,9 @@ ue::ue(int _id,
         phy_s(_id, ue_c, _scenario_c, _phy_enb_config)
 {
     id = _id;
+    control_id = ue_c.control_id.empty() ? std::to_string(id) : ue_c.control_id;
+    // The knob is absolute: it starts at the .ini value and replaces it from then on.
+    ctl.priority = ue_c.priority;
     delta_metric = ue_c.delta_metric;
     delay_t_metric = ue_c.delay_t_metric;
     beta_metric = ue_c.beta_metric;
@@ -127,8 +130,14 @@ ue::ue(int _id,
     phy_freq = _phy_enb_config.frequency;
     phy_speed = ue_c.get_phy_config().max_speed;
     phy_doppler_f = phy_freq * phy_speed / LIGHTSPEED;
-    phy_dl.init(_phy_enb_config.n_rbgs, _phy_enb_config.bandwidth);
-    phy_ul.init(_phy_enb_config.n_rbgs, _phy_enb_config.bandwidth);
+    phy_dl.init(
+        _phy_enb_config.n_rbgs,
+        _phy_enb_config.bandwidth,
+        _phy_enb_config.n_carrier_prbs);
+    phy_ul.init(
+        _phy_enb_config.n_rbgs,
+        _phy_enb_config.bandwidth,
+        _phy_enb_config.n_carrier_prbs);
     pdcp_ul.init(_harq_config.mod, _harq_config.layers, _harq_config.log_units);
     pdcp_dl.init(_harq_config.mod, _harq_config.layers, _harq_config.log_units);
 }
@@ -178,9 +187,9 @@ const pdcp_layer& ue::pdcp(int tx_dir) const
     return tx_dir == TX_DL ? pdcp_dl : pdcp_ul;
 }
 
-float ue::get_metric(int tx_dir, int f_index, int n_ues)
+float ue::get_metric(int tx_dir, int f_index, int n_enabled)
 {
-    return phy(tx_dir).get_metric(f_index, n_ues);
+    return phy(tx_dir).get_metric(f_index, n_enabled, ctl.rr_rank, ctl.priority);
 }
 
 float ue::get_tp(int tx_dir, int f_index)
@@ -248,15 +257,43 @@ bool ue::has_packets(int tx_dir)
     return pdcp(tx_dir).has_pkts();
 }
 
-schedule_candidate ue::get_schedule_candidate(int tx_dir, int f_index, int n_ues, int ue_index)
+// Every UE is asked, including the disabled ones. Returning early on !ctl.enabled looks
+// free and is not: each UE keeps its own round robin cursor and they stay in step only
+// because all of them are asked for the same sequence of f. A skipped UE would fall out
+// of step and break the rotation, silently, when it is enabled again.
+schedule_candidate ue::get_schedule_candidate(int tx_dir, int f_index, int n_enabled, int ue_index)
 {
     schedule_candidate candidate;
     candidate.ue_index = ue_index;
     candidate.ue_id = id;
     candidate.bits_per_symbol = phy(tx_dir).get_tp(f_index);
-    candidate.metric = phy(tx_dir).get_metric(f_index, n_ues);
-    candidate.has_data = pdcp(tx_dir).has_pkts() && candidate.bits_per_symbol > 0;
+    candidate.metric = phy(tx_dir).get_metric(f_index, n_enabled, ctl.rr_rank, ctl.priority);
+    candidate.has_data = ctl.enabled
+                      && pdcp(tx_dir).has_pkts()
+                      && candidate.bits_per_symbol > 0
+                      && (ctl.rmax_bps[tx_dir] <= 0.0f || ctl.rmax_tokens[tx_dir] > 0.0f);
     return candidate;
+}
+
+void ue::set_enabled(bool on)
+{
+    if (ctl.enabled == on) return;
+    ctl.enabled = on;
+    if (!on)
+    {
+        pdcp_dl.drop_all();
+        pdcp_ul.drop_all();
+        phy_dl.reset_scheduler_state();
+        phy_ul.reset_scheduler_state();
+        scheduler_effective_bits[TX_DL] = 0.0f;
+        scheduler_effective_bits[TX_UL] = 0.0f;
+        scheduler_active[TX_DL] = false;
+        scheduler_active[TX_UL] = false;
+        scheduler_current_service_gap_ttis[TX_DL] = 0;
+        scheduler_current_service_gap_ttis[TX_UL] = 0;
+        scheduler_max_service_gap_ttis[TX_DL] = 0;
+        scheduler_max_service_gap_ttis[TX_UL] = 0;
+    }
 }
 
 void ue::update_pos()
@@ -283,8 +320,69 @@ void ue::emit_mobility_monitoring()
 
 float ue::handle_pkt(float bits, int tx_dir, int f_index)
 {
-    float eff_tp = pdcp(tx_dir).handle_pkt(bits, phy(tx_dir).get_mcs(f_index), phy(tx_dir).get_sinr(f_index), mobility_m.get_distance());
+    // The cap is on the bits granted over the air, retransmissions and padding included.
+    // Tokens may go negative: the UE stops being a candidate until the per-TTI refill
+    // brings them back, which keeps the long run rate at rmax without splitting an RBG.
+    float eff_tp = pdcp(tx_dir).handle_pkt(
+        bits,
+        phy(tx_dir).get_mcs(f_index),
+        phy(tx_dir).get_sinr(f_index),
+        mobility_m.get_distance(),
+        phy(tx_dir).get_ri());
+    if (ctl.rmax_bps[tx_dir] > 0.0f)
+        ctl.rmax_tokens[tx_dir] -=
+            static_cast<float>(
+                pdcp(tx_dir).last_charged_grant_bits());
+    scheduler_effective_bits[tx_dir] += eff_tp;
     return eff_tp;
+}
+
+void ue::finalize_ul_allocation(int allocated_prbs)
+{
+    phy_ul.finalize_ul_allocation(allocated_prbs);
+}
+
+void ue::prepare_scheduler_tti(int tx_dir, bool active)
+{
+    scheduler_active[tx_dir] = active;
+    phy(tx_dir).prepare_scheduler_tti(active);
+}
+
+void ue::record_provisional_scheduler_service(int tx_dir, float scheduled_bits)
+{
+    phy(tx_dir).record_provisional_service(scheduled_bits);
+}
+
+void ue::commit_scheduler_tti()
+{
+    for (int tx_dir = TX_DL; tx_dir <= TX_UL; tx_dir++)
+    {
+        if (!scheduler_active[tx_dir])
+        {
+            scheduler_current_service_gap_ttis[tx_dir] = 0;
+            continue;
+        }
+        if (scheduler_effective_bits[tx_dir] > 0.0f)
+        {
+            scheduler_current_service_gap_ttis[tx_dir] = 0;
+        }
+        else
+        {
+            scheduler_current_service_gap_ttis[tx_dir]++;
+            scheduler_max_service_gap_ttis[tx_dir] =
+                std::max(
+                    scheduler_max_service_gap_ttis[tx_dir],
+                    scheduler_current_service_gap_ttis[tx_dir]);
+        }
+    }
+    phy_dl.update_scheduler_state(
+        scheduler_effective_bits[TX_DL], scheduler_active[TX_DL]);
+    phy_ul.update_scheduler_state(
+        scheduler_effective_bits[TX_UL], scheduler_active[TX_UL]);
+    scheduler_effective_bits[TX_DL] = 0.0f;
+    scheduler_effective_bits[TX_UL] = 0.0f;
+    scheduler_active[TX_DL] = false;
+    scheduler_active[TX_UL] = false;
 }
 
 float ue::get_delay_t()
@@ -324,6 +422,26 @@ void ue::update_pdcp()
         ue_log.log_partial("plul:{} pldl:{} pcul:{} pcdl:{} pclul:{} pcldl:{} ", l4s_ul.p_l, l4s_dl.p_l, l4s_ul.p_c, l4s_dl.p_c, l4s_ul.p_cl, l4s_dl.p_cl);
         pdcp_queue_status ul_status = pdcp_ul.get_queue_status();
         pdcp_queue_status dl_status = pdcp_dl.get_queue_status();
+        ue_log.log_partial(
+            "admbul:{} admbdl:{} delbul:{} delbdl:{} expbul:{} expbdl:{} "
+            "qdropbul:{} qdropbdl:{} rdropbul:{} rdropbdl:{} "
+            "rtxbul:{} rtxbdl:{} pendbul:{} pendbdl:{} cresbul:{} cresbdl:{} ",
+            ul_status.admitted_bits_total, dl_status.admitted_bits_total,
+            pdcp_ul.delivered_bits_total(), pdcp_dl.delivered_bits_total(),
+            pdcp_ul.expired_bits_total(), pdcp_dl.expired_bits_total(),
+            pdcp_ul.queue_dropped_bits_total(), pdcp_dl.queue_dropped_bits_total(),
+            pdcp_ul.radio_dropped_bits_total(), pdcp_dl.radio_dropped_bits_total(),
+            pdcp_ul.retransmitted_bits_total(), pdcp_dl.retransmitted_bits_total(),
+            ul_status.pending_bits_total, dl_status.pending_bits_total,
+            ul_status.conservation_residual_bits, dl_status.conservation_residual_bits);
+        ue_log.log_partial(
+            "harqqul:{} harqqdl:{} harqhwul:{} harqhwddl:{} "
+            "harqageul:{} harqagedl:{} harqretryul:{} harqretrydl:{} ",
+            ul_status.harq_size, dl_status.harq_size,
+            ul_status.harq_high_water_blocks, dl_status.harq_high_water_blocks,
+            ul_status.harq_oldest_age, dl_status.harq_oldest_age,
+            ul_status.harq_oldest_retry_ordinal,
+            dl_status.harq_oldest_retry_ordinal);
         if(ul_status.nfqueue_queue_num >= 0 || dl_status.nfqueue_queue_num >= 0)
         {
             ue_log.log_partial(
@@ -360,6 +478,15 @@ void ue::emit_pdcp_monitoring()
     ul_point.fields["error_mbps_sum"] = make_metric_field(pdcp_ul.get_error(true), field_aggregation::sum);
     ul_point.fields["latency_s_mean"] = make_metric_field(pdcp_ul.get_latency(true), field_aggregation::mean);
     ul_point.fields["ip_latency_s_mean"] = make_metric_field(pdcp_ul.get_ip_latency(true), field_aggregation::mean);
+    const pdcp_queue_status ul_status = pdcp_ul.get_queue_status();
+    ul_point.tags["harq_model"] = ul_status.harq_model;
+    ul_point.fields["harq_queue_blocks_last"] = make_metric_field(ul_status.harq_size, field_aggregation::last);
+    ul_point.fields["harq_queue_high_water_blocks_last"] = make_metric_field(ul_status.harq_high_water_blocks, field_aggregation::last);
+    ul_point.fields["harq_oldest_age_s_last"] = make_metric_field(ul_status.harq_oldest_age, field_aggregation::last);
+    ul_point.fields["harq_oldest_retry_ordinal_last"] = make_metric_field(ul_status.harq_oldest_retry_ordinal, field_aggregation::last);
+    ul_point.fields["retransmitted_bits_total_last"] = make_metric_field(static_cast<double>(ul_status.retransmitted_bits_total), field_aggregation::last);
+    ul_point.fields["radio_dropped_bits_total_last"] = make_metric_field(static_cast<double>(ul_status.radio_dropped_bits_total), field_aggregation::last);
+    ul_point.fields["charged_grant_bits_last"] = make_metric_field(static_cast<double>(ul_status.last_charged_grant_bits), field_aggregation::last);
     monitoring.publish(ul_point);
 
     metric_point dl_point;
@@ -373,6 +500,15 @@ void ue::emit_pdcp_monitoring()
     dl_point.fields["error_mbps_sum"] = make_metric_field(pdcp_dl.get_error(true), field_aggregation::sum);
     dl_point.fields["latency_s_mean"] = make_metric_field(pdcp_dl.get_latency(true), field_aggregation::mean);
     dl_point.fields["ip_latency_s_mean"] = make_metric_field(pdcp_dl.get_ip_latency(true), field_aggregation::mean);
+    const pdcp_queue_status dl_status = pdcp_dl.get_queue_status();
+    dl_point.tags["harq_model"] = dl_status.harq_model;
+    dl_point.fields["harq_queue_blocks_last"] = make_metric_field(dl_status.harq_size, field_aggregation::last);
+    dl_point.fields["harq_queue_high_water_blocks_last"] = make_metric_field(dl_status.harq_high_water_blocks, field_aggregation::last);
+    dl_point.fields["harq_oldest_age_s_last"] = make_metric_field(dl_status.harq_oldest_age, field_aggregation::last);
+    dl_point.fields["harq_oldest_retry_ordinal_last"] = make_metric_field(dl_status.harq_oldest_retry_ordinal, field_aggregation::last);
+    dl_point.fields["retransmitted_bits_total_last"] = make_metric_field(static_cast<double>(dl_status.retransmitted_bits_total), field_aggregation::last);
+    dl_point.fields["radio_dropped_bits_total_last"] = make_metric_field(static_cast<double>(dl_status.radio_dropped_bits_total), field_aggregation::last);
+    dl_point.fields["charged_grant_bits_last"] = make_metric_field(static_cast<double>(dl_status.last_charged_grant_bits), field_aggregation::last);
     monitoring.publish(dl_point);
 }
 
@@ -443,6 +579,7 @@ void ue::emit_queue_monitoring()
         point.tags["ue_id"] = std::to_string(id);
         point.tags["tx_dir"] = tx_dir_tag(tx_dir);
         point.tags["queue_mode"] = using_l4s ? "l4s" : "legacy";
+        point.tags["harq_model"] = status.harq_model;
         point.ts_ns = ts_ns;
         point.fields["generated_packets_sum"] = make_metric_field(layer.get_generated_packets(true), field_aggregation::sum);
         point.fields["using_l4s_last"] = make_metric_field(using_l4s ? 1 : 0, field_aggregation::last);
@@ -450,11 +587,21 @@ void ue::emit_queue_monitoring()
         point.fields["ip_buffer_packets_last"] = make_metric_field(status.ip_buffer_size, field_aggregation::last);
         point.fields["capture_packets_last"] = make_metric_field(status.capture_size, field_aggregation::last);
         point.fields["release_packets_last"] = make_metric_field(status.release_size, field_aggregation::last);
+        point.fields["release_high_water_packets_last"] = make_metric_field(status.release_high_water, field_aggregation::last);
         point.fields["harq_packets_last"] = make_metric_field(status.harq_size, field_aggregation::last);
+        point.fields["harq_high_water_packets_last"] = make_metric_field(status.harq_high_water_blocks, field_aggregation::last);
+        point.fields["harq_capacity_packets_last"] = make_metric_field(status.harq_capacity_blocks, field_aggregation::last);
         point.fields["ip_oldest_age_s_last"] = make_metric_field(status.ip_oldest_age, field_aggregation::last);
         point.fields["capture_oldest_age_s_last"] = make_metric_field(status.capture_oldest_age, field_aggregation::last);
         point.fields["release_oldest_age_s_last"] = make_metric_field(status.release_oldest_age, field_aggregation::last);
         point.fields["harq_oldest_age_s_last"] = make_metric_field(status.harq_oldest_age, field_aggregation::last);
+        point.fields["harq_oldest_retry_ordinal_last"] = make_metric_field(status.harq_oldest_retry_ordinal, field_aggregation::last);
+        point.fields["retransmitted_bits_total_last"] = make_metric_field(static_cast<double>(status.retransmitted_bits_total), field_aggregation::last);
+        point.fields["radio_dropped_bits_total_last"] = make_metric_field(static_cast<double>(status.radio_dropped_bits_total), field_aggregation::last);
+        point.fields["charged_grant_bits_last"] = make_metric_field(static_cast<double>(status.last_charged_grant_bits), field_aggregation::last);
+        point.fields["admitted_bits_total_last"] = make_metric_field(static_cast<double>(status.admitted_bits_total), field_aggregation::last);
+        point.fields["pending_bits_total_last"] = make_metric_field(static_cast<double>(status.pending_bits_total), field_aggregation::last);
+        point.fields["conservation_residual_bits_last"] = make_metric_field(status.conservation_residual_bits, field_aggregation::last);
         point.fields["nfqueue_queue_num_last"] = make_metric_field(status.nfqueue_queue_num, field_aggregation::last);
         point.fields["nfqueue_ce_rewrite_packets_last"] = make_metric_field(status.nfqueue_ce_rewrite_packets, field_aggregation::last);
         point.fields["nfqueue_drop_packets_last"] = make_metric_field(status.nfqueue_drop_packets, field_aggregation::last);
@@ -531,6 +678,21 @@ void ue::emit_phy_monitoring()
     dl_point.fields["mcs_mean"] = make_metric_field(phy_dl.get_mean_mcs(), field_aggregation::mean);
     dl_point.fields["eff_mean"] = make_metric_field(phy_dl.get_mean_eff(), field_aggregation::mean);
     dl_point.fields["ri_mean"] = make_metric_field(phy_dl.get_ri(), field_aggregation::mean);
+    if (phy_dl.uses_throughput_history_scheduler())
+    {
+        dl_point.fields["throughput_average_bits_per_tti_last"] =
+            make_metric_field(
+                phy_dl.get_throughput_average_bits_per_tti(),
+                field_aggregation::last);
+        dl_point.fields["throughput_metric_mean"] =
+            make_metric_field(
+                phy_dl.get_mean_scheduler_metric(),
+                field_aggregation::mean);
+        dl_point.fields["throughput_weighted_metric_mean"] =
+            make_metric_field(
+                phy_dl.get_mean_scheduler_metric() * ctl.priority,
+                field_aggregation::mean);
+    }
     monitoring.publish(dl_point);
 
     metric_point ul_point;
@@ -544,6 +706,21 @@ void ue::emit_phy_monitoring()
     ul_point.fields["mcs_mean"] = make_metric_field(phy_ul.get_mean_mcs(), field_aggregation::mean);
     ul_point.fields["eff_mean"] = make_metric_field(phy_ul.get_mean_eff(), field_aggregation::mean);
     ul_point.fields["ri_mean"] = make_metric_field(phy_ul.get_ri(), field_aggregation::mean);
+    if (phy_ul.uses_throughput_history_scheduler())
+    {
+        ul_point.fields["throughput_average_bits_per_tti_last"] =
+            make_metric_field(
+                phy_ul.get_throughput_average_bits_per_tti(),
+                field_aggregation::last);
+        ul_point.fields["throughput_metric_mean"] =
+            make_metric_field(
+                phy_ul.get_mean_scheduler_metric(),
+                field_aggregation::mean);
+        ul_point.fields["throughput_weighted_metric_mean"] =
+            make_metric_field(
+                phy_ul.get_mean_scheduler_metric() * ctl.priority,
+                field_aggregation::mean);
+    }
     monitoring.publish(ul_point);
 }
 
@@ -578,13 +755,27 @@ void ue::estimate_channel_state()
         
     }
 
-    phy(TX_DL).estimate_channel_state(distance, phy_s, phy_macro_fading, phy_o2i, TX_DL, pos, get_oldest_timestamp(TX_DL), get_avg_tp(TX_DL), current_t);
-    phy(TX_UL).estimate_channel_state(distance, phy_s, phy_macro_fading, phy_o2i, TX_UL, pos, get_oldest_timestamp(TX_UL), get_avg_tp(TX_UL), current_t);
+    phy(TX_DL).estimate_channel_state(distance, phy_s, phy_macro_fading, phy_o2i, TX_DL, pos, get_oldest_timestamp(TX_DL), get_avg_tp(TX_DL), current_t, ctl.sinr_offset_db[TX_DL]);
+    phy(TX_UL).estimate_channel_state(distance, phy_s, phy_macro_fading, phy_o2i, TX_UL, pos, get_oldest_timestamp(TX_UL), get_avg_tp(TX_UL), current_t, ctl.sinr_offset_db[TX_UL]);
     phy_period_counter++;
 }
 
 void ue::step()
 {
+    if (!ctl.enabled)
+    {
+        // A detached UE is gone from the simulation, but its source still has to be
+        // drained: for a real UE that is the netfilter queue, which would otherwise back
+        // up in the kernel, and for a simulated one it keeps the traffic generator's
+        // random stream advancing, so that detaching a UE does not shift its own
+        // realization. Everything ingested is dropped on the spot.
+        pdcp_dl.step(current_t);
+        pdcp_ul.step(current_t);
+        pdcp_dl.drop_all();
+        pdcp_ul.drop_all();
+        return;
+    }
+
     update_pdcp();
     update_pos();
     emit_mobility_monitoring();
@@ -621,8 +812,8 @@ void ue::print_traffic()
         LOG_INFO_I("ue::print_traffic") << " UL IP buf: " << ul_status.ip_buffer_size << " pkts (oldest UID " << ul_status.ip_oldest_uid << ", delay " << ul_status.ip_oldest_age << " s)" << END();
         LOG_INFO_I("ue::print_traffic") << " DL IP buf: " << dl_status.ip_buffer_size << " pkts (oldest UID " << dl_status.ip_oldest_uid << ", delay " << dl_status.ip_oldest_age << " s)" << END();
 
-        LOG_INFO_I("ue::print_traffic") << " UL HARQ buf: " << ul_status.harq_size << " pkts (oldest ID " << ul_status.harq_oldest_id << ", delay " << ul_status.harq_oldest_age << " s, n_tx " << ul_status.harq_oldest_n_tx << ")" << END();
-        LOG_INFO_I("ue::print_traffic") << " DL HARQ buf: " << dl_status.harq_size << " pkts (oldest ID " << dl_status.harq_oldest_id << ", delay " << dl_status.harq_oldest_age << " s, n_tx " << dl_status.harq_oldest_n_tx << ")" << END();
+        LOG_INFO_I("ue::print_traffic") << " UL HARQ buf: " << ul_status.harq_size << " pkts (oldest ID " << ul_status.harq_oldest_id << ", delay " << ul_status.harq_oldest_age << " s, retry ordinal " << ul_status.harq_oldest_retry_ordinal << ")" << END();
+        LOG_INFO_I("ue::print_traffic") << " DL HARQ buf: " << dl_status.harq_size << " pkts (oldest ID " << dl_status.harq_oldest_id << ", delay " << dl_status.harq_oldest_age << " s, retry ordinal " << dl_status.harq_oldest_retry_ordinal << ")" << END();
 
         LOG_INFO_I("ue::print_traffic") << " UL capture buf: " << ul_status.capture_size << " pkts (oldest UID " << ul_status.capture_oldest_uid << ", delay " << ul_status.capture_oldest_age << " s)" << END();
         LOG_INFO_I("ue::print_traffic") << " DL capture buf: " << dl_status.capture_size << " pkts (oldest UID " << dl_status.capture_oldest_uid << ", delay " << dl_status.capture_oldest_age << " s)" << END();

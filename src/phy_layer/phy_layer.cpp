@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  **********************************************/
 #include <phy_layer/phy_layer.h>
+#include <phy_layer/penetration_model.h>
+#include <phy_layer/power_model.h>
+#include <utils/rng_seed.h>
 
 double linearToDBm(double linear)
 {
@@ -44,13 +47,13 @@ void phy_layer::init_scenario(int _type, float _eNB_h, float _w, float _antenna_
     check_boundaries();
 }
 
-void phy_layer::init_phy(float _freq, float _ue_speed, float _target_ber, float _ue_h, int _tx, float _scaling_factor, int _mimo_l, int _numerology, int _n_sc_rbg, bool _mcs_tables, float _gain_tx, float _gain_rx, float _tx_power, float _alpha_ul, float _nominal_pusch_p0, bool _set_ul_pow, float _tx_power_ul, float _power_boost, float _NF_UT, float _NF_eNB, int _num_interf_ues, int _num_interf_eNBs, float _d_interference, float _interfered_ratio)
+void phy_layer::init_phy(float _freq, float _ue_speed, float _target_ber, float _ue_h, int _tx, float _scaling_factor, int _mimo_l, int _numerology, int _n_sc_rbg, bool _mcs_tables, float _gain_tx, float _gain_rx, float _tx_power, float _alpha_ul, float _nominal_pusch_p0, ul_power_mode _ul_power_mode, float _tx_power_ul, float _power_boost, float _thermal_noise_density, float _NF_UT, float _NF_eNB, int _num_interf_ues, int _num_interf_eNBs, float _d_interference, float _interfered_ratio)
 {
     freq = _freq;
     tx_power_eNb = _tx_power;
     alpha_ul = _alpha_ul;
     nominal_pusch_p0 = _nominal_pusch_p0;
-    set_ul_pow = _set_ul_pow;
+    power_mode = _ul_power_mode;
     tx_power_ul = _tx_power_ul;
     doppler_f = freq * _ue_speed / LIGHTSPEED;
     freq_ghz = freq / GHZ2HZ;
@@ -63,6 +66,7 @@ void phy_layer::init_phy(float _freq, float _ue_speed, float _target_ber, float 
     rbg_lookup_index = get_rbg_sndex(n_rb_rbg);
     mcs_tables = _mcs_tables;
     power_boost = _power_boost;
+    thermal_noise_density = _thermal_noise_density;
     antenna_gain_tx = _gain_tx;
     antenna_gain_rx = _gain_rx;
     NF_UT = _NF_UT;
@@ -84,15 +88,28 @@ void phy_layer::init_amc(int _modulation_m, int _cqi_m, int _cqi_p)
 void phy_layer::init_rank(int _period, int _n_antennas,int _mimo_layers)
 {
     ri_period = _period;
-    max_ri = std::min(_n_antennas,_mimo_layers);
+    max_ri = std::max(
+        1,
+        std::min(
+            std::min(_n_antennas, _mimo_layers),
+            NUM_RI_VALUES));
     current_ri = max_ri;
     layers = max_ri;
 }
 
 phy_layer::phy_layer(int _tx, int _id, scenario_config _scenario_config, phy_ue_config _phy_ue_config, phy_enb_config _phy_enb_config, bool _stochastics, int _verbosity)
-    : distance_cqi_dist(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()),
-      gen(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()),
-      metric_h(_phy_enb_config.metric_type, _phy_ue_config.priority, _phy_ue_config.beta, _phy_ue_config.delay_t, _phy_ue_config.delta)
+    : fading_gen(phy_rng_seed(
+          _stochastics, _id, _tx, PHY_STREAM_FADING)),
+      interference_gen(phy_rng_seed(
+          _stochastics, _id, _tx, PHY_STREAM_INTERFERENCE)),
+      cqi_distance_gen(phy_rng_seed(
+          _stochastics, _id, _tx, PHY_STREAM_CQI_DISTANCE)),
+      metric_h(
+          _phy_enb_config.metric_type,
+          _phy_ue_config.beta,
+          _phy_ue_config.delay_t,
+          _phy_ue_config.delta,
+          _phy_enb_config.pf_alpha)
 
 {
 
@@ -113,6 +130,10 @@ phy_layer::phy_layer(int _tx, int _id, scenario_config _scenario_config, phy_ue_
     // Verbosity configuration
     verbosity = _verbosity;
     bandwidth = _phy_enb_config.bandwidth;
+    throughput_state.set_time_window_ms(
+        _phy_enb_config.throughput_time_window_ms);
+    throughput_intra_tti_update =
+        _phy_enb_config.throughput_intra_tti_update;
 
     // Metric variables
     init_metric(id);
@@ -120,11 +141,13 @@ phy_layer::phy_layer(int _tx, int _id, scenario_config _scenario_config, phy_ue_
     // Model variables
     init_scenario(_scenario_config.type, _scenario_config.eNB_h, _scenario_config.w,
                   _scenario_config.antenna_h, _phy_ue_config.ue_h, _phy_ue_config.max_speed);
+    penetration_profile = _phy_ue_config.penetration_profile;
+    vehicle_profile = _phy_ue_config.vehicle_profile;
 
     // Phy configuration
     init_phy(_phy_enb_config.frequency, max_speed, _phy_enb_config.target_ber, ue_h,
              tx, _phy_ue_config.scaling_factor, _phy_enb_config.mimo_l, _phy_enb_config.numerology,
-             _phy_enb_config.n_sc_rbg, _scenario_config.mcs_tables, tx == TX_DL ? _phy_enb_config.eNB_gain : _phy_enb_config.UT_gain, tx == TX_DL ? _phy_enb_config.UT_gain : _phy_enb_config.eNB_gain, _phy_enb_config.tx_power, _phy_ue_config.alpha_ul, _phy_ue_config.nominal_pusch_p0, _phy_ue_config.set_ul_pow, _phy_ue_config.tx_power_ul, _phy_enb_config.power_boost, _phy_enb_config.figure_noise_ut, _phy_enb_config.figure_noise_enb, _phy_enb_config.n_int_ues, _phy_enb_config.n_int_eNBs, _phy_enb_config.d_interference, _phy_enb_config.interfered_ratio);
+             _phy_enb_config.n_sc_rbg, _scenario_config.mcs_tables, tx == TX_DL ? _phy_enb_config.eNB_gain : _phy_enb_config.UT_gain, tx == TX_DL ? _phy_enb_config.UT_gain : _phy_enb_config.eNB_gain, _phy_enb_config.tx_power, _phy_ue_config.alpha_ul, _phy_ue_config.nominal_pusch_p0, _phy_ue_config.power_mode, _phy_ue_config.tx_power_ul, _phy_enb_config.power_boost, _phy_enb_config.thermal_noise, _phy_enb_config.figure_noise_ut, _phy_enb_config.figure_noise_enb, _phy_enb_config.n_int_ues, _phy_enb_config.n_int_eNBs, _phy_enb_config.d_interference, _phy_enb_config.interfered_ratio);
 
     // AMC
     init_amc(_phy_enb_config.modulation_m, _phy_enb_config.cqi_mode, _phy_ue_config.cqi_period);
@@ -136,7 +159,14 @@ phy_layer::phy_layer(int _tx, int _id, scenario_config _scenario_config, phy_ue_
     init_update_rates(doppler_f, cqi_period, ri_period);
 
     if (mcs_tables)
-        std::copy(MCS_SINR[modulation_m][rbg_lookup_index][layers], MCS_SINR[modulation_m][rbg_lookup_index][layers] + MCS_INDEX_MAX, mcs_lookup);
+    {
+        const int layer_index = get_mcs_layer_index(layers);
+        std::copy(
+            MCS_SINR[modulation_m][rbg_lookup_index][layer_index],
+            MCS_SINR[modulation_m][rbg_lookup_index][layer_index]
+                + MCS_INDEX_MAX,
+            mcs_lookup);
+    }
 }
 
 void phy_layer::compute_coherence_bw()
@@ -212,9 +242,16 @@ void phy_layer::check_boundaries()
         break;
     }
 }
-void phy_layer::init(int _n_rbs, int _bandwidth)
+void phy_layer::init(
+    int _n_rbs,
+    int _bandwidth,
+    int _carrier_prbs)
 {
     n_rbs = _n_rbs;
+    n_tot_RB =
+        _carrier_prbs > 0
+            ? _carrier_prbs
+            : n_rbs * n_rb_rbg;
     // bandwidth = _bandwidth;
     cqi_s = 0;
     mcs_s = 0;
@@ -240,7 +277,9 @@ void phy_layer::init(int _n_rbs, int _bandwidth)
 
 float phy_layer::compute_rayleigh()
 {
-    return 10 * log10(sqrt(pow(sinr_stochastics(gen), 2) + pow(sinr_stochastics(gen), 2)));
+    const float in_phase = sinr_stochastics(fading_gen);
+    const float quadrature = sinr_stochastics(fading_gen);
+    return rayleigh_power_gain_db(in_phase, quadrature);
 }
 
 float phy_layer::compute_pathloss_ABG(float distance, bool los) 
@@ -365,55 +404,42 @@ float phy_layer::compute_pathloss_ABG(float distance, bool los)
         break;
     }
 
-    float plb = 10 * alpha * log10(distance - d_in) + beta + 10 * gamma * log10(freq_ghz);
+    const float effective_distance = std::max(distance - d_in, 1.0f);
+    float plb =
+        10 * alpha * log10(effective_distance)
+        + beta
+        + 10 * gamma * log10(freq_ghz);
 
     return plb;
 }
-float phy_layer::compute_penetration_losses()
+float phy_layer::compute_penetration_losses(
+    float building_sample,
+    float vehicle_sample)
 {
-
     if (o2i == OUTDOOR)
-    {
-        pltw = 0.0f;
-    }
-    else if (o2i == IN_BUILDING)
+        return pltw = 0.0f;
+
+    if (o2i == IN_CAR)
+        return pltw = vehicle_penetration_loss_db(
+                   vehicle_profile, vehicle_sample);
+
+    if (o2i != IN_BUILDING || penetration_profile == PENETRATION_NONE)
+        return pltw = 0.0f;
+
+    if (penetration_profile == PENETRATION_LEGACY_AUTO)
     {
         if (freq_ghz <= 6.0f)
-        {
-
-            pltw = 12.0f; // maybe 12 could be more accurate, 20dB is in 3GPP
-        }
-        else
-        {
-            // Compute penetration loss based on the scenario for frequencies > 6 GHz.
-            switch (scenario)
-            {
-            case RURAL_MACROCELL:
-                pltw = 5.0f - 10.0f * log10(
-                                          0.3f * pow(10.0f, (-2.0f - 0.2f * freq_ghz) / 10.0f) +
-                                          0.7f * pow(10.0f, (-5.0f - 4.0f * freq_ghz) / 10.0f));
-                break;
-
-            case URBAN_MICROCELL:
-            case URBAN_MACROCELL:
-                pltw = 5.0f - 10.0f * log10(
-                                          0.7f * pow(10.0f, (-23.0f - 0.3f * freq_ghz) / 10.0f) +
-                                          0.3f * pow(10.0f, (-5.0f - 4.0f * freq_ghz) / 10.0f));
-                break;
-
-            default:
-
-                pltw = 10.0f;
-                break;
-            }
-        }
-    }
-    else
-    {
-        // for car scenarios
-        pltw = 6.0f; // maybe 3-6dB,in 3GPP is said 9dB
+            return pltw = 12.0f;
+        penetration_profile =
+            scenario == RURAL_MACROCELL
+                ? PENETRATION_LOW_LOSS
+                : PENETRATION_HIGH_LOSS;
     }
 
+    pltw = building_penetration_loss_db(
+        penetration_profile,
+        freq_ghz,
+        building_sample);
     return pltw;
 }
 
@@ -475,34 +501,6 @@ float phy_layer::calculateOxygenLoss()
 
     return a_oxygen;
 }
-float phy_layer::compute_d_in(float _d)
-{
-
-    do
-    {
-        float urban_distance1 = uniform_stochastics(gen) * 25.0f;
-        float urban_distance2 = uniform_stochastics(gen) * 25.0f;
-        float rma_distance1 = uniform_stochastics(gen) * 10.0f;
-        float rma_distance2 = uniform_stochastics(gen) * 10.0f;
-
-        switch (scenario)
-        {
-        case RURAL_MACROCELL:
-            d_in = std::min(rma_distance1, rma_distance2);
-            break;
-
-        case URBAN_MICROCELL:
-        case URBAN_MACROCELL:
-            d_in = std::min(urban_distance1, urban_distance2);
-            break;
-
-        default:
-            return 0.0f;
-        }
-    } while (d_in >= _d);
-    return d_in;
-}
-
 float phy_layer::compute_losses(float distance)
 {
 
@@ -586,6 +584,16 @@ float phy_layer::get_mean_eff()
     return eff_s;
 }
 
+float phy_layer::get_mean_scheduler_metric() const
+{
+    if (metric_v.empty())
+        return 0.0f;
+    float total = 0.0f;
+    for (float metric : metric_v)
+        total += metric;
+    return total / static_cast<float>(metric_v.size());
+}
+
 int phy_layer::get_modulation_index()
 {
     return modulation_m;
@@ -598,7 +606,14 @@ int phy_layer::get_n_layers()
 
 int phy_layer::estimate_cqi_from_distance(float distance)
 {
-    return (int)std::min(15.0, std::max(1.0, pow(int(15 * ((ENB_MAX_RANGE - distance) / ENB_MAX_RANGE)), 0.5) + distance_cqi_dist(gen)));
+    return (int)std::min(
+        15.0,
+        std::max(
+            1.0,
+            pow(
+                int(15 * ((ENB_MAX_RANGE - distance) / ENB_MAX_RANGE)),
+                0.5)
+                + distance_cqi_dist(cqi_distance_gen)));
 }
 
 float phy_layer::estimate_eff_from_sinr(float sinr)
@@ -633,7 +648,7 @@ int phy_layer::get_mcs_index(float sinr)
     int i = 0;
     if (mcs_lookup[0] > sinr)
         return -1;
-    for (i = 0; i < MCS_INDEX_MAX - 1 && mcs_lookup[i + 1] < sinr; i++)
+    for (i = 0; i < MCS_INDEX_MAX - 1 && mcs_lookup[i + 1] <= sinr; i++)
         ;
     return i;
 }
@@ -682,16 +697,8 @@ void phy_layer::estimate_ri()
 {
     if (tx == TX_DL)
     {
-        int i;
-        for (i = 0; i < max_ri; i++)
-        {
-            if (db_sinr_s <= RI_THRES[modulation_m][i])
-            {
-                current_ri = i + 1;
-                current_ri = std::min(current_ri, mimo_l);
-                return;
-            }
-        }
+        current_ri = estimate_rank_from_mean_sinr(
+            modulation_m, max_ri, db_sinr_s);
     }
     else
     {
@@ -701,69 +708,74 @@ void phy_layer::estimate_ri()
 void phy_layer::estimate_noise_interference(float _tx_power, int _n_ues, float _d_interference, float _interfered_ratio, float _figure, float _gain_tx, float _gain_rx)
 {
     float tx_power;
-    float n_rbs_local;
 
     if (tx == TX_UL)
     {
-        tx_power = -23 + uniform_stochastics(gen) * 46;
-        n_rbs_local = 1.0f;
+        // Until explicit neighbor allocations exist, UL interference is represented as
+        // an aggregate per-PRB power spectral density.
+        tx_power =
+            -23 + uniform_stochastics(interference_gen) * 46;
     }
     else
     {
-        tx_power = _tx_power;
-        n_rbs_local = n_rbs;
+        tx_power = downlink_power_per_prb_dbm(_tx_power, n_tot_RB);
     }
 
     noise_figure = _figure;
     antenna_gain_tx = _gain_tx;
     antenna_gain_rx = _gain_rx;
 
-    float RB_bandwidth = 12 * 15000 * pow(2, numerology);
-    float noise = -174 + noise_figure + 10 * log10(RB_bandwidth);
+    const float noise =
+        thermal_noise_per_prb_dbm(thermal_noise_density, noise_figure, numerology);
     linear_noise = dBmToLinear(noise);
 
-    float n_interference = _n_ues;
-    float random = uniform_stochastics(gen);
+    const float n_interference = _n_ues;
+    const float random = uniform_stochastics(interference_gen);
     d_interference = _d_interference + random * 100;
 
-    float PwrDBm = tx_power - 10 * log10(n_rbs_local) + 10 * log10(_interfered_ratio);
-    linear_interference_transmitted = n_interference * dBmToLinear(PwrDBm);
-
-    float interference = linearToDBm(linear_interference_transmitted) - compute_losses(d_interference) - compute_pathloss_ABG(d_interference, true);
-    float linear_interference = dBmToLinear(interference);
+    float linear_interference = 0.0f;
+    linear_interference_transmitted = 0.0f;
+    if (n_interference > 0.0f && _interfered_ratio > 0.0f)
+    {
+        const float power_dbm =
+            tx_power + 10.0f * log10(_interfered_ratio);
+        linear_interference_transmitted =
+            n_interference * dBmToLinear(power_dbm);
+        const float interference =
+            linearToDBm(linear_interference_transmitted)
+            - compute_losses(d_interference)
+            - compute_pathloss_ABG(d_interference, true);
+        linear_interference = dBmToLinear(interference);
+    }
 
     noise_interf = linearToDBm(linear_noise + linear_interference);
 }
 
+float phy_layer::ul_power_per_prb_dbm(float distance, int allocated_prbs)
+{
+    const float nominal_power_per_prb =
+        nominal_pusch_p0 + alpha_ul * compute_pathloss_ABG(distance, true);
+    return calculate_ul_power_allocation(
+               power_mode,
+               tx_power_ul,
+               nominal_power_per_prb,
+               allocated_prbs)
+        .per_prb_dbm;
+}
+
 float phy_layer::sinr_power_model(float _tx_power, float distance, float pathloss, float _macro_fading)
 {
-    float n_rbs_local;
-    float tx_power;
-
-    if (tx_dir == 1)
-    {
-        if (set_ul_pow)
-        {
-            tx_power = tx_power_ul;
-        }
-
-        else
-        {
-            tx_power = nominal_pusch_p0 + alpha_ul * compute_pathloss_ABG(distance, true);
-        }
-        tx_power = std::max(10.0f, std::min(tx_power, 23.0f));
-       
-        n_rbs_local = 1.0f;
-    }
-    else
-    {
-        tx_power = _tx_power;
-        n_rbs_local = n_rbs;
-    }
+    const float tx_power_per_prb =
+        tx_dir == TX_UL
+            ? ul_power_per_prb_dbm(distance, ul_scheduling_prbs)
+            : downlink_power_per_prb_dbm(_tx_power, n_tot_RB);
+    current_tx_power_per_prb_dbm = tx_power_per_prb;
     float rayleigh = stochastics ? compute_rayleigh() : 0;
 
-    float sinr = tx_power - 10 * log10(n_rbs_local) + rayleigh - pathloss + _macro_fading + antenna_gain_tx + antenna_gain_rx - noise_interf - 10 * log10(current_ri);
-    return sinr;
+    float sinr = tx_power_per_prb + rayleigh - pathloss + _macro_fading
+                 + antenna_gain_tx + antenna_gain_rx - noise_interf
+                 - 10 * log10(current_ri);
+    return sinr + sinr_offset_db;
 }
 
 void phy_layer::estimate_sinr(float distance, int f, float _macro_fading)
@@ -782,7 +794,12 @@ void phy_layer::estimate_sinr(float distance, int f, float _macro_fading)
     }
 
     db_sinr_s += db_sinr_v[f];
-    rsrp_v[f] = db_sinr_v[f] + noise_interf - 10 * log10(n_rbs) - 10 * log10(n_sc_rb) + power_boost;
+    // db_sinr_v is referenced to one PRB. Convert the desired received PRB power
+    // to one resource element for the RSRP approximation.
+    rsrp_v[f] =
+        db_sinr_v[f] + noise_interf
+        - 10.0f * log10(static_cast<float>(SCH_N_RE_DEFAULT))
+        + power_boost;
     rsrp_s += rsrp_v[f];
     l_sinr_v[f] = pow(10, db_sinr_v[f] / 10.0);
 }
@@ -818,8 +835,58 @@ void phy_layer::prepare_metrics(float oldest_t, float avg_tp)
 {
     // Get UE info for metrics
     metric_i.req_time = oldest_t;
-    metric_i.avrg_tp = avg_tp * MBIT2BIT / S2MS;
+    metric_i.avrg_tp =
+        metric_h.uses_throughput_history()
+            ? throughput_metric_average()
+            : avg_tp * MBIT2BIT / S2MS;
     metric_i.current_delay = current_t - metric_i.req_time;
+}
+
+float phy_layer::standalone_rate_bits_per_tti() const
+{
+    float bits_per_symbol = 0.0f;
+    for (float rate : tp_v)
+        bits_per_symbol += rate;
+    return bits_per_symbol
+           * SCH_N_OFDM_DEFAULT
+           * static_cast<float>(1 << numerology);
+}
+
+float phy_layer::throughput_metric_average() const
+{
+    if (!throughput_intra_tti_update || !throughput_state.initialized())
+        return throughput_state.average_throughput();
+    return throughput_state.projected_average(provisional_service_bits);
+}
+
+void phy_layer::prepare_scheduler_tti(bool active)
+{
+    provisional_service_bits = 0.0f;
+    if (!metric_h.uses_throughput_history() || !active)
+        return;
+    throughput_state.prepare(standalone_rate_bits_per_tti());
+}
+
+void phy_layer::record_provisional_service(float scheduled_bits)
+{
+    if (!metric_h.supports_provisional_history()
+        || !throughput_intra_tti_update)
+        return;
+    provisional_service_bits += std::max(scheduled_bits, 0.0f);
+}
+
+void phy_layer::update_scheduler_state(float effective_bits, bool active)
+{
+    if (!metric_h.uses_throughput_history() || !active)
+        return;
+    prepare_scheduler_tti(true);
+    throughput_state.update(effective_bits, true);
+}
+
+void phy_layer::reset_scheduler_state()
+{
+    throughput_state.reset();
+    provisional_service_bits = 0.0f;
 }
 
 void phy_layer::estimate_metric(int f)
@@ -836,17 +903,58 @@ void phy_layer::estimate_tp(int f)
     tp_v[f] = current_tp;
 }
 
-float phy_layer::get_metric(int f, int n_ues)
+float phy_layer::get_metric(int f, int n_enabled, int rr_rank, float priority)
 {
     if (metric_h.is_rr())
-        return metric_h.get_rr_metric(f, id, n_ues);
-    return metric_v[f];
+        return metric_h.get_rr_metric(f, rr_rank, n_enabled);
+    if (metric_h.is_throughput_metric())
+    {
+        metric_info current = metric_i;
+        current.current_tp = tp_v[f];
+        if (metric_h.uses_throughput_history())
+            current.avrg_tp = throughput_metric_average();
+        return metric_h.get_metric(current, current_t, f) * priority;
+    }
+    return metric_v[f] * priority;
 }
 
 float phy_layer::get_tp(int f)
 {
     return tp_v[f];
 }
+
+void phy_layer::finalize_ul_allocation(int allocated_prbs)
+{
+    if (tx_dir != TX_UL || !is_init)
+        return;
+
+    const int prbs = normalized_prb_count(allocated_prbs);
+    const float finalized_power_per_prb =
+        ul_power_per_prb_dbm(last_distance, prbs);
+    const float power_delta_db =
+        finalized_power_per_prb - current_tx_power_per_prb_dbm;
+    ul_scheduling_prbs = prbs;
+
+    if (std::fabs(power_delta_db) < 1e-6f)
+        return;
+
+    current_tx_power_per_prb_dbm = finalized_power_per_prb;
+    reset_cqi();
+    for (int f = 0; f < n_rbs; f++)
+    {
+        db_sinr_v[f] += power_delta_db;
+        l_sinr_v[f] = pow(10, db_sinr_v[f] / 10.0);
+        rsrp_v[f] += power_delta_db;
+        estimate_channel_q(f);
+        estimate_tp(f);
+        estimate_metric(f);
+    }
+    average_cqi();
+    db_sinr_s += power_delta_db;
+    l_sinr_s = pow(10, db_sinr_s / 10.0);
+    rsrp_s += power_delta_db;
+}
+
 void phy_layer::init_update_rates(float _doppler_f, int _cqi_p, int _ri_p)
 {
     if (_doppler_f > 0)
@@ -866,20 +974,31 @@ void phy_layer::init_update_rates(float _doppler_f, int _cqi_p, int _ri_p)
     }
 }
 
-void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float _macro_fading, int _o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t)
+void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float _macro_fading, int _o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t, float _sinr_offset_db)
 {
     // doppler_f = freq * _speed / LIGHTSPEED;
 
     current_t = _current_t;
+    last_distance = distance;
     o2i = _o2i;
     tx_dir = _tx_dir;
     macro_fading = _macro_fading;
+    sinr_offset_db = _sinr_offset_db;
 
     if (!d_in_computed)
     {
-        d_in = compute_d_in(distance);
-        pltw = compute_penetration_losses();
-        plin = 0.5 * d_in;
+        d_in =
+            o2i == IN_BUILDING
+                    && penetration_profile != PENETRATION_NONE
+                ? phy_s.get_indoor_depth(distance)
+                : 0.0f;
+        pltw = compute_penetration_losses(
+            phy_s.get_building_penetration_sample(),
+            phy_s.get_vehicle_penetration_sample());
+        plin =
+            o2i == IN_BUILDING
+                ? 0.5f * d_in
+                : 0.0f;
 
         d_in_computed = true;
     }
@@ -908,6 +1027,9 @@ void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float 
         {
             estimate_channel_q(i);
             estimate_tp(i);
+        }
+        if (update_cqi || metric_h.is_throughput_metric())
+        {
             estimate_metric(i);
             /*if(tx==TX_DL && dumb)
             {

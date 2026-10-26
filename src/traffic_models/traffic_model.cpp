@@ -27,3 +27,13 @@ int traffic_model::get_pkt_size(int tx)
 {
     return traff_model->get_pkt_size(tx);
 }
+
+void traffic_model::set_target(int tx, float bps)
+{
+    traff_model->set_target(tx, bps);
+}
+
+float traffic_model::get_target(int tx) const
+{
+    return traff_model->get_target(tx);
+}

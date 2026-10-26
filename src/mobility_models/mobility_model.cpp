@@ -55,6 +55,26 @@ void mobility_model::set_initial_position(float _max_apothem)
     mob_model->set_random_initial_position(_max_apothem);
 }
 
+void mobility_model::set_pos(float x, float y)
+{
+    mob_model->set_pos(x, y);
+}
+
+void mobility_model::set_speed(float speed_ms)
+{
+    mob_model->set_speed(speed_ms);
+}
+
+float mobility_model::get_speed()
+{
+    return mob_model->get_speed();
+}
+
+float mobility_model::get_apothem()
+{
+    return mob_model->get_apothem();
+}
+
 float mobility_model::get_distance()
 {
     return mob_model->get_current_d();

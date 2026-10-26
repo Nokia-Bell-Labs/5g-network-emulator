@@ -11,3 +11,17 @@ logs/
 __pycache__/
 .pytest_cache/
 .cache/
+
+# Virtualenvs are built inside the image, and a host one copied in here would carry
+# symlinks to an interpreter that is not in the image.
+.venv/
+api/.venv/
+transport/.venv/
+
+# Working directories and the wiki checkout, none of which belong in the image.
+wiki/
+results/
+tmp/
+testconfig/
+run_scripts/.captures/
+run_scripts/.generated/

@@ -44,6 +44,12 @@ public:
     void set_initial_position(float _max_apothem);
     float get_distance();
 
+    // Runtime control setters. Position in metres, speed in m/s.
+    void set_pos(float x, float y);
+    void set_speed(float speed_ms);
+    float get_speed();
+    float get_apothem();
+
     void get_pos(float &x, float &y);
 
     pos2d *get_pos();

@@ -43,6 +43,14 @@ public:
 public: 
     std::vector<ue>* get_ue_list();
 
+    // Recomputes the dense round robin rank over the enabled UEs. Called once at init(),
+    // when every UE is enabled and the rank equals the id, and again by
+    // control_manager::tick() whenever the enabled set changes.
+    static void refresh_enabled_ranks(std::vector<ue> &list);
+
+    // Number of UEs currently attached. A disabled UE does not count anywhere.
+    int enabled_count() const;
+
 private: 
     
     void log_ue_creation(int _n_ues, int ue_type, int _n_antennas, int _cqi_period, int _ri_period, float scaling_factor);

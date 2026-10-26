@@ -1,0 +1,16 @@
+{
+  "duplicate_curves": 544,
+  "increasing_sinr_steps": 0,
+  "out_of_range_values": 0,
+  "packed_float64_little_endian_sha256": "d61acbe2a5cea399570c53b40f0374261ca28ac80ccefed0aee85728ea9bda70",
+  "schema_version": 1,
+  "shape": [
+    2,
+    5,
+    4,
+    28,
+    60
+  ],
+  "source": "include/mac_layer/mac_definitions.h",
+  "value_count": 67200
+}
