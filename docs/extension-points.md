@@ -1,6 +1,6 @@
 # Extension Points
 
-FikoRE has three registries for research code that needs to add a scheduler metric, a runtime parameter, or per-TTI logic without editing the emulator sources. A fourth extension point, packet annotation, lets research code read captured packets at the NFQUEUE boundary. A fifth, packet fates, lets it observe what finally happens to each packet. Each one is empty by default, and a run with nothing registered behaves as it did before they existed.
+FikoRE has three registries for research code that needs to add a scheduler metric, a runtime parameter, or per-TTI logic without editing the emulator sources. A fourth extension point, packet annotation, lets research code read captured packets at the NFQUEUE boundary. A fifth, packet fates, lets it observe what finally happens to each packet. Each one adds nothing by default: the controller, parameter, annotation and fate registries start empty, the metric registry holds only the seven built-in metrics, and a run with nothing registered behaves as it did before they existed.
 
 A registration is a file-scope object in any translation unit that is linked into the binary. Link the object files directly, or force the linker to keep the unit: a static library drops a translation unit that nothing references, and its registrar never runs.
 
@@ -40,7 +40,7 @@ const metric_registrar registration(make_entry());
 
 A configuration selects it with `metric_type: 1000`. A `metric_type` that is not registered is a start-up error that lists the registered identifiers. Earlier versions mapped it to round robin.
 
-- `score` is called once per UE and resource block group, on the grid threads, and must only read. `metric_info` carries the rate, the average throughput, the delay terms, and the UE id and direction (`TX_DL` or `TX_UL`) of the UE being scored.
+- `score` can be called several times for the same UE and resource block group within one TTI, and from different threads: the UE threads and the grid worker threads, concurrently for different UEs. It must be a function of its arguments and of state that it only reads, and it must be safe to call from several threads at once. `metric_info` carries the rate, the average throughput, the delay terms, and the UE id and direction (`TX_DL` or `TX_UL`) of the UE being scored.
 - `recipe` tells `phy_layer` how to feed the metric. `uses_history` makes it supply `avrg_tp` the way PF does; `supports_provisional_history` allows reranking within a TTI. See [throughput-schedulers.md](throughput-schedulers.md) for the meaning of the exponents.
 - `throughput_based` must be set for a metric that ranks by rate without history. Otherwise `phy_layer` reuses the value computed at the last CQI refresh.
 - `bind` is optional. It builds the callable and the recipe for one handler from the configuration, which is how PF takes `pf_alpha`.

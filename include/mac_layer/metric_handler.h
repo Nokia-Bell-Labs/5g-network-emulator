@@ -42,12 +42,12 @@ public:
 
 // Stores the metric info
 struct metric_info{
-    double req_time = 0; 
+    double req_time = 0;
     float avrg_tp = 0; 
     float current_tp = 0; 
-    double current_delay = 0; 
+    double current_delay = 0;
     float delta = 0.001; 
-    double delay_t = 0.1; 
+    double delay_t = 0.1;
     int index = 0; 
     // Who is being scored and in which direction (TX_DL / TX_UL), for metrics that keep
     // state per UE and direction. The built-in metrics do not read them.
@@ -124,7 +124,7 @@ struct metric_registrar
     explicit metric_registrar(metric_entry entry);
 };
 
-// The six metrics return the base expression, without the UE priority. The priority is
+// The seven built-in metrics return the base expression, without the UE priority. The priority is
 // an absolute runtime knob (ue_overrides::priority) and is applied by phy_layer::get_metric
 // at the point of reading, so that changing it takes effect on the next TTI instead of
 // waiting for the next CQI refresh, which is when metric_v[] gets rewritten.
@@ -144,7 +144,7 @@ private:
     bool round_robin = false;
     bool throughput_based = false;
     throughput_metric_recipe throughput_recipe;
-    double delay_t; 
+    double delay_t;
     float delta;
     // Resolved once at construction, so scoring costs one indirect call.
     metric_score_fn score_fn;
