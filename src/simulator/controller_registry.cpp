@@ -1,5 +1,6 @@
 #include <simulator/controller_registry.h>
 
+#include <mutex>
 #include <stdexcept>
 #include <utility>
 
@@ -19,6 +20,20 @@ std::vector<registration> &pending()
     static std::vector<registration> list;
     return list;
 }
+
+// Guards the list. A factory is called without it held (see instantiate_controllers), so
+// that a factory may itself register or clear without deadlocking or invalidating the loop.
+std::mutex &pending_mutex()
+{
+    static std::mutex m;
+    return m;
+}
+
+std::vector<registration> snapshot()
+{
+    std::lock_guard<std::mutex> lock(pending_mutex());
+    return pending();
+}
 }
 
 void register_controller(std::string name, controller_factory factory)
@@ -28,6 +43,7 @@ void register_controller(std::string name, controller_factory factory)
     if (!factory)
         throw std::invalid_argument("controller '" + name + "' has no factory");
 
+    std::lock_guard<std::mutex> lock(pending_mutex());
     std::vector<registration> &list = pending();
     for (const registration &r : list)
     {
@@ -40,6 +56,7 @@ void register_controller(std::string name, controller_factory factory)
 std::vector<std::string> registered_controller_names()
 {
     std::vector<std::string> names;
+    std::lock_guard<std::mutex> lock(pending_mutex());
     for (const registration &r : pending())
         names.push_back(r.name);
     return names;
@@ -48,8 +65,10 @@ std::vector<std::string> registered_controller_names()
 std::vector<controller_instance> instantiate_controllers(
     const std::string &config_file, const cell_info &cell, const std::vector<ue> &ues)
 {
+    // Works on a copy: the registry may change while a factory runs.
+    const std::vector<registration> registered = snapshot();
     std::vector<controller_instance> built;
-    for (const registration &r : pending())
+    for (const registration &r : registered)
     {
         std::unique_ptr<controller> c = r.factory(config_file, cell, ues);
         if (c)
@@ -60,5 +79,6 @@ std::vector<controller_instance> instantiate_controllers(
 
 void clear_registered_controllers()
 {
+    std::lock_guard<std::mutex> lock(pending_mutex());
     pending().clear();
 }

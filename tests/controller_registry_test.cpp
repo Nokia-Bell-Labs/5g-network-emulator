@@ -375,6 +375,65 @@ void test_throwing_controller_stops_the_run()
     clear_registered_controllers();
 }
 
+// With start() and join() the step runs on the ticker thread. The exception must come out of
+// join() on the calling thread, not terminate the process.
+void test_throwing_controller_reaches_join()
+{
+    clear_registered_controllers();
+    reset_probes();
+    register_controller("thrower", [](const std::string &, const cell_info &, const std::vector<ue> &)
+                        { return std::unique_ptr<controller>(new thrower()); });
+    write_file(TIMELINE, TIMELINE_TEXT);
+    write_config(true);
+
+    simulator sim(CONFIG);
+    sim.start();
+    bool threw = false;
+    try
+    {
+        sim.join();
+    }
+    catch (const std::runtime_error &e)
+    {
+        threw = true;
+        const std::string what = e.what();
+        assert(what.find("thrower") != std::string::npos);
+        assert(what.find("model diverged") != std::string::npos);
+    }
+    assert(threw);
+    clear_registered_controllers();
+}
+
+// A factory runs on a copy of the list: one that registers another controller, or clears the
+// registry, neither breaks the loop nor changes which factories of this run are called.
+void test_factory_may_change_the_registry()
+{
+    clear_registered_controllers();
+    reset_probes();
+    register_controller("first", [](const std::string &, const cell_info &, const std::vector<ue> &)
+                        {
+                            register_controller("late", probe_factory("late"));
+                            return std::unique_ptr<controller>(new probe("first"));
+                        });
+    register_controller("second", [](const std::string &, const cell_info &, const std::vector<ue> &)
+                        {
+                            clear_registered_controllers();
+                            return std::unique_ptr<controller>(new probe("second"));
+                        });
+    write_file(TIMELINE, TIMELINE_TEXT);
+    write_config(true);
+    {
+        simulator sim(CONFIG);
+        sim.run_steps(2);
+    }
+    assert(calls_of("first").size() == 2);
+    assert(calls_of("second").size() == 2);
+    assert(calls_of("late").empty());              // registered during the run, for the next one
+    assert(g_constructed.count("late") == 0);
+    assert(registered_controller_names().empty()); // the second factory cleared the list
+    clear_registered_controllers();
+}
+
 // A factory may decline, for a run that has nothing for it to do.
 void test_factory_may_decline()
 {
@@ -412,7 +471,7 @@ void test_factory_arguments()
     simulator sim(CONFIG);
     assert(seen_file == CONFIG);
     assert(seen_ues == 2);
-    assert(near(seen_duration, 0.05, 1e-6));
+    assert(seen_duration == 0.05);              // a double all the way, no rounding to float
     clear_registered_controllers();
 }
 
@@ -459,6 +518,8 @@ int main()
     test_registration_order();
     test_duplicate_name_is_rejected();
     test_throwing_controller_stops_the_run();
+    test_throwing_controller_reaches_join();
+    test_factory_may_change_the_registry();
     test_factory_may_decline();
     test_factory_arguments();
     test_loader_ignores_unknown_sections_and_keys();
