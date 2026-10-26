@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <unistd.h>
 
+#include <mac_layer/metric_handler.h>
 #include <utils/terminal_logging.h>
 #include <utils/monitoring/monitoring_config.h>
 
@@ -181,7 +182,7 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "dl_traffic_file")
                                 ue_c_list.back().ue_c.traffic_c.dl_traffic_file = value;
                             if (key == "delay")
-                                ue_c_list.back().ue_c.traffic_c.delay = std::stof(value);
+                                ue_c_list.back().ue_c.traffic_c.delay = std::stod(value);
                             if (key == "var_perc")
                                 ue_c_list.back().ue_c.traffic_c.var_perc = std::stof(value);
                             if (key == "pkt_size")
@@ -752,16 +753,28 @@ void configuration_loader::load(std::string cfg_file)
                 + std::to_string(dl_queue));
     }
 
-    const bool uses_throughput_history =
-        metric_type == METRIC_PF || metric_type == METRIC_BET;
-    if (metric_type != METRIC_PF && pf_alpha_configured)
+    // The metric is resolved here, whether or not any UE exists, so that an unknown
+    // metric_type is a configuration error and not a problem found at the first UE. What it
+    // may do with the throughput history comes from its registry entry: the built-ins and
+    // registered metrics are treated alike.
+    const metric_entry selected_metric = metric_handler::check_metric(metric_type);
+    throughput_metric_recipe selected_recipe = selected_metric.recipe;
+    if (selected_metric.bind)
+    {
+        metric_params probe;
+        probe.pf_alpha = pf_alpha;
+        selected_recipe = selected_metric.bind(probe).recipe;
+    }
+    const bool uses_throughput_history = selected_recipe.uses_history;
+    if (!selected_metric.bind && pf_alpha_configured)
         throw std::invalid_argument(
-            "pf_alpha is only valid for metric_type: 6 (PF)");
+            "pf_alpha is only valid for a metric that takes it: metric_type: 6 (PF)");
     if (uses_throughput_history)
     {
         if (throughput_time_window_ms <= 0.0f)
             throw std::invalid_argument(
-                "PF and BET require throughput_time_window_ms > 0");
+                "metrics that use the throughput history (PF, BET) require "
+                "throughput_time_window_ms > 0");
         if (metric_type == METRIC_PF && pf_alpha < 0.0f)
             throw std::invalid_argument("PF requires pf_alpha >= 0");
         for (const ue_full_config &ue_c : ue_c_list)
@@ -778,7 +791,7 @@ void configuration_loader::load(std::string cfg_file)
         if (throughput_intra_tti_update)
             throw std::invalid_argument(
                 "throughput_intra_tti_update: allocation_unit is only valid "
-                "for PF and BET");
+                "for a metric that uses the throughput history (PF, BET)");
         for (const ue_full_config &ue_c : ue_c_list)
         {
             if (ue_c.ue_c.beta_metric_configured)

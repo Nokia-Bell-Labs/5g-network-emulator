@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -340,6 +342,50 @@ void unknown_id_is_rejected()
     assert(!throws_invalid_argument(METRIC_PF));
 }
 
+// A configuration with no UE at all, which is where an unknown metric used to go unnoticed.
+bool config_rejected(const std::string &mac)
+{
+    const char *path = "build/tests/metric_registry_config.ini";
+    std::filesystem::create_directories("build/tests");
+    {
+        std::ofstream out(path);
+        out << "[Global]\nduration: 0.001\n[Scenario]\nscenario_type: 1\n"
+            << "[eNBConfig]\nfrequency: 3500000000\n[MACLayer]\n" << mac;
+    }
+    try
+    {
+        configuration_loader loader(path);
+        (void)loader;
+    }
+    catch (const std::invalid_argument &)
+    {
+        return true;
+    }
+    return false;
+}
+
+// The loader resolves the metric from the registry, with or without UEs, and takes what the
+// metric may do with the throughput history from its entry and not from its number.
+void configuration_checks_the_registry_entry()
+{
+    assert(config_rejected("metric_type: 999\n"));
+    assert(!config_rejected("metric_type: 6\nthroughput_time_window_ms: 100\n"));
+    assert(!config_rejected("metric_type: 5\n"));
+
+    // 1000 uses the history: it needs the window and may update it within the TTI.
+    assert(!config_rejected(
+        "metric_type: 1000\nthroughput_time_window_ms: 100\n"
+        "throughput_intra_tti_update: allocation_unit\n"));
+    assert(config_rejected("metric_type: 1000\nthroughput_time_window_ms: 0\n"));
+    // 1001 does not use it, so the intra-TTI update has nothing to act on.
+    assert(config_rejected("metric_type: 1001\nthroughput_intra_tti_update: allocation_unit\n"));
+    // pf_alpha is for an entry with a binder, 1001, and not for one without it, 1000.
+    assert(!config_rejected("metric_type: 1001\npf_alpha: 2\n"));
+    assert(config_rejected(
+        "metric_type: 1000\npf_alpha: 2\nthroughput_time_window_ms: 100\n"));
+    assert(config_rejected("metric_type: 5\nthroughput_intra_tti_update: allocation_unit\n"));
+}
+
 ue make_test_ue(int id, int metric_type)
 {
     ue_model model(
@@ -409,6 +455,7 @@ int main()
     configured_and_round_robin_entries();
     duplicate_id_is_rejected();
     unknown_id_is_rejected();
+    configuration_checks_the_registry_entry();
     phy_layer_fills_ue_id_and_direction();
     return 0;
 }
