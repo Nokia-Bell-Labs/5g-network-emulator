@@ -872,6 +872,11 @@ std::string control_manager::read_state(const std::vector<ue *> &targets) const
         const std::vector<param_entry> &entries = reg.entries();
         for (size_t i = 0; i < entries.size(); i++)
         {
+            if (entries[i].type == param_type::text)
+            {
+                if (entries[i].read_text) j[entries[i].name] = entries[i].read_text(*targets[t]);
+                continue;
+            }
             if (!entries[i].read) continue;
             if (entries[i].type == param_type::boolean) j[entries[i].name] = entries[i].read(*targets[t]) != 0.0;
             else j[entries[i].name] = entries[i].read(*targets[t]);

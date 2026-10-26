@@ -13,12 +13,36 @@
 
 #include <nlohmann/json.hpp>
 #include <simulator/simulator.h>
+#include <utils/control/param_registry.h>
 #include <utils/control/proto_version.h>
 
 using json = nlohmann::json;
 
 namespace
 {
+// A registered text knob, to check that get reports it next to the built-in ones.
+std::string g_text_knob;
+
+struct text_knob_registrar
+{
+    text_knob_registrar()
+    {
+        param_entry e;
+        e.name = "test.sync_label";
+        e.type = param_type::text;
+        e.description = "Test knob: free text kept in a test variable.";
+        e.apply = [](ue &, const param_value &v, std::string &reason) {
+            const std::string *str = std::get_if<std::string>(&v);
+            if (str == nullptr) { reason = "expected a string"; return false; }
+            g_text_knob = *str;
+            return true;
+        };
+        e.read_text = [](ue &) { return g_text_knob; };
+        param_registry::add(e);
+    }
+};
+const text_knob_registrar text_knob;
+
 const char *SOCKET_PATH = "build/tests/control_sync.sock";
 const char *CONFIG = "build/tests/control_sync.ini";
 
@@ -325,6 +349,23 @@ void test_textual_ue_id_addresses_the_configured_instance()
     const json ack = json::parse(c.read_line());
     assert(ack["result"][0]["target"] == "ue/1");
     assert(ack["result"][0]["ue_id"] == "controlSmoke_1");
+    assert(ack["result"][0]["test.sync_label"] == "");
+
+    c.write_line(
+        "{\"id\":90,\"at_tti\":2,\"cmds\":["
+        "{\"target\":\"ue/controlSmoke_1\",\"set\":{\"test.sync_label\":\"a \\\"b\\\" c\"}}]}");
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    sim.run_steps(1);
+    assert(json::parse(c.read_line())["status"] == "ok");
+    assert(g_text_knob == "a \"b\" c");
+
+    c.write_line(
+        "{\"id\":91,\"at_tti\":3,\"cmds\":["
+        "{\"op\":\"get\",\"target\":\"ue/controlSmoke_1\"}]}");
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    sim.run_steps(1);
+    const json text_ack = json::parse(c.read_line());
+    assert(text_ack["result"][0]["test.sync_label"] == "a \"b\" c");
     c.disconnect();
 }
 }

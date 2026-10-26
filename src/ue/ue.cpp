@@ -395,7 +395,7 @@ float ue::get_delta()
     return delta_metric;
 }
 
-int ue::get_id()
+int ue::get_id() const
 {
     return id;
 }
