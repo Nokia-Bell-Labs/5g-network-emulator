@@ -253,6 +253,7 @@ void simulated_packet_handler::update_pending_packet(const ip_pkt& pkt, bit_fate
     pending_packet_result& state = pending_results[pkt.uid];
     if(state.original_size == 0) state.original_size = pkt.original_size;
     state.accounted_bits += pkt.size;
+    if(dropped && !state.dropped) state.failure_fate = fate;
     state.dropped = state.dropped || dropped;
     state.congestion_signal = state.congestion_signal || pkt.ce_marked;
 
@@ -261,9 +262,21 @@ void simulated_packet_handler::update_pending_packet(const ip_pkt& pkt, bit_fate
             "packet fragment accounting exceeds original size");
     if(state.original_size > 0 && state.accounted_bits == state.original_size)
     {
-        if(state.dropped) verdict(pkt, final_packet_verdict::DROP);
-        else if(state.congestion_signal) verdict(pkt, final_packet_verdict::ACCEPT_CE);
-        else verdict(pkt, final_packet_verdict::ACCEPT);
+        if(state.dropped)
+        {
+            verdict(pkt, final_packet_verdict::DROP);
+            resolve_fate(pkt.uid, state.failure_fate, state.original_size, pkt.ip_t, false);
+        }
+        else if(state.congestion_signal)
+        {
+            verdict(pkt, final_packet_verdict::ACCEPT_CE);
+            resolve_fate(pkt.uid, bit_fate::delivered, state.original_size, pkt.ip_t, true);
+        }
+        else
+        {
+            verdict(pkt, final_packet_verdict::ACCEPT);
+            resolve_fate(pkt.uid, bit_fate::delivered, state.original_size, pkt.ip_t, false);
+        }
         pending_results.erase(pkt.uid);
     }
 }

@@ -55,6 +55,8 @@ private:
         std::uint64_t original_size = 0;
         std::uint64_t accounted_bits = 0;
         bool dropped = false;
+        // The fate of the first fragment that failed, which names the packet once it is whole.
+        bit_fate failure_fate = bit_fate::queue_dropped;
         bool congestion_signal = false;
     };
 

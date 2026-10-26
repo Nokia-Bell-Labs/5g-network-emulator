@@ -1,6 +1,6 @@
 # Extension Points
 
-FikoRE has three registries for research code that needs to add a scheduler metric, a runtime parameter, or per-TTI logic without editing the emulator sources. A fourth extension point, packet annotation, lets research code read captured packets at the NFQUEUE boundary. Each one is empty by default, and a run with nothing registered behaves as it did before they existed.
+FikoRE has three registries for research code that needs to add a scheduler metric, a runtime parameter, or per-TTI logic without editing the emulator sources. A fourth extension point, packet annotation, lets research code read captured packets at the NFQUEUE boundary. A fifth, packet fates, lets it observe what finally happens to each packet. Each one is empty by default, and a run with nothing registered behaves as it did before they existed.
 
 A registration is a file-scope object in any translation unit that is linked into the binary. Link the object files directly, or force the linker to keep the unit: a static library drops a translation unit that nothing references, and its registrar never runs.
 
@@ -173,6 +173,56 @@ const registrar registration;
 - **Read only.** An annotator sees the packet and cannot change it. The only write to a captured packet remains the CE codepoint of an `ACCEPT_CE` verdict. Verdicts, ECN handling and counters are the same with and without annotators registered.
 - `uid` is the NFQUEUE packet id, the same number that `ip_pkt::uid` carries. A capture record is popped once, so an observer sees a uid once, whatever fragments the packet is later split into.
 - `tx_dir` is the direction that the caller gave to `ingest`. During shutdown the handler drains the last packets with `TX_DL` whatever its direction, so an observer that needs the true direction should also use `queue_num`.
+
+## Packet fates
+
+A fate observer is told, once per packet, how the packet ended: delivered, expired, queue dropped or radio dropped. It receives a `pkt_fate_event` at the point where the handler resolves that fate, in the simulated source and in the live (captured) source alike.
+
+```cpp
+#include <atomic>
+#include <cstdint>
+
+#include <pdcp_layer/pkt_fate.h>
+
+namespace
+{
+std::atomic<std::uint64_t> delivered_ce_bits{0};
+std::atomic<std::uint64_t> lost_bits{0};
+
+// UE phase thread, once per uid.
+void count_fates(const pkt_fate_event &event)
+{
+    if (event.fate == bit_fate::delivered)
+    {
+        if (event.ce)
+            delivered_ce_bits.fetch_add(event.bits, std::memory_order_relaxed);
+    }
+    else
+    {
+        lost_bits.fetch_add(event.bits, std::memory_order_relaxed);
+    }
+}
+
+struct registrar
+{
+    registrar() { register_fate_observer(&count_fates); }
+};
+const registrar registration;
+}
+```
+
+The event carries `uid`, `fate`, `bits`, `delay_s`, `ce`, `tx_dir`, `queue_num` and `ue_id`.
+
+- **`uid`** is the NFQUEUE packet id in live mode. In simulated mode it counts the packets of one handler, so it repeats across UEs and directions; use `ue_id` and `tx_dir` with it. In live mode it is the number that the ingest observers of packet annotation receive, so a fate observer can look up what it stored at ingest.
+- **`bits`** is the original size of the packet, the whole of it, whatever its fragments met on the way. Several fragments of one packet, released in different TTIs or in different HARQ blocks, produce one event, when the last of them is accounted.
+- **`fate`** is the final fate. A packet whose fragments met different fates reports the first failure that the handler saw. The per-UE counters work per fragment, so for such a packet they split the bits between two fates while the event carries one. For every packet whose fragments share a fate, the sum of `bits` over the events of a fate equals the matching counter (`delivered_bits_total()`, `expired_bits_total()`, `queue_dropped_bits_total()`, `radio_dropped_bits_total()`) at the end of a run.
+- **`delay_s`** is the time from the arrival of the packet (`ip_pkt::ip_t`) to the moment its fate is resolved, in seconds and never negative. For a delivered packet that is the release; for a drop it is the drop. In live mode a packet is released in uid order when `order_packets` is set, so the release can wait for an earlier packet.
+- **`ce`** is true only for a packet that was delivered with a CE mark (an `ACCEPT_CE` verdict in live mode). A marked packet that is then lost reports `ce == false`.
+- **`queue_num`** is the NFQUEUE number in live mode and -1 in simulated mode. `tx_dir` and `ue_id` are -1 when a handler was built outside a `pdcp_layer` and nobody told it.
+- **Every fate is reported.** That includes a tail drop on a full buffer, an AQM drop at dequeue, a packet dropped while still in the HARQ buffer, the packets that a detach empties from the queues, and the packets that a live handler drops at once because its completion queue is full.
+- **Read only.** An observer sees the event and changes nothing: no counter, verdict, queue or order, so the bit-conservation residual keeps its meaning and a run gives the same counters with and without observers. With nothing registered, each fate costs one byte load.
+- **Freeze rule.** Register at start-up, typically from a file-scope object. The registry freezes at the first `packet_handler::step` of any handler (or at the first resolved fate of a handler that is used without a step); a registration after that throws `std::logic_error`. A null function throws `std::invalid_argument` and a 17th observer throws `std::length_error`. Observers run in registration order. One that throws is swallowed and counted in `fate_observer_failures()`, and the observers after it still run. There is no way to clear the registry in a running process.
+- **Threads.** Observers run on the phase thread of the UE that owns the handler, one thread per UE, and may run at the same time for different UEs. They must not block, and must keep their state per UE or synchronise it.
 
 ## Order within a TTI
 

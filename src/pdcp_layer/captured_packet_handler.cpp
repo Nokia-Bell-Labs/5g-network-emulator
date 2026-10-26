@@ -124,6 +124,7 @@ double captured_packet_handler::ingest(int tx_dir, double current_t)
             packet_handler::verdict(
                 pkt,
                 final_packet_verdict::DROP);
+            resolve_fate(pkt.uid, bit_fate::queue_dropped, pkt.size, pkt.ip_t, false);
             drop_packets++;
             prev_uid = info.pkt_id;
             continue;
@@ -365,6 +366,7 @@ bool captured_packet_handler::release_state(
                 additional_drop_bits,
                 state.failure_fate);
         drop_packets++;
+        resolve_fate(uid, state.failure_fate, state.original_bits, state.packet.ip_t, false);
     }
     else
     {
@@ -376,6 +378,12 @@ bool captured_packet_handler::release_state(
         ipl_mean.step();
         if (final == final_packet_verdict::ACCEPT_CE)
             ce_rewrite_packets++;
+        resolve_fate(
+            uid,
+            bit_fate::delivered,
+            state.original_bits,
+            state.packet.ip_t,
+            final == final_packet_verdict::ACCEPT_CE);
     }
 
     finalized_uids.insert(uid);

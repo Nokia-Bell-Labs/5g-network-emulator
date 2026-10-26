@@ -13,6 +13,7 @@
 
 #include <pdcp_layer/captured_packet_handler.h>
 #include <pdcp_layer/packet_handler.h>
+#include <pdcp_layer/pkt_fate.h>
 #include <pdcp_layer/simulated_packet_handler.h>
 #include <utils/rng_seed.h>
 #include <simulator/configuration_loader.h>
@@ -46,6 +47,7 @@ void packet_handler::quit()
 
 void packet_handler::step(double t)
 {
+    if(fate_mode_ == fate_mode_unbound) bind_fate_observers();
     tp_mean.step();
     g_mean.step();
     e_mean.step();
@@ -210,6 +212,34 @@ float packet_handler::get_tp(bool elapsed)
     else return BIT2MBIT*tp_mean.get()*S2MS;
 }
 
+void packet_handler::bind_fate_observers()
+{
+    fate_mode_ = freeze_fate_observers() != 0 ? fate_mode_observed : fate_mode_none;
+}
+
+void packet_handler::report_fate(
+    std::uint32_t uid,
+    bit_fate fate,
+    std::uint64_t bits,
+    double arrival_t,
+    bool ce)
+{
+    if(fate_mode_ == fate_mode_unbound) bind_fate_observers();
+    if(fate_mode_ != fate_mode_observed) return;
+    // The live source stamps arrival with its own clock, which can run a few microseconds ahead
+    // of the TTI time, so the difference is clamped.
+    pkt_fate_event event;
+    event.uid = uid;
+    event.fate = fate;
+    event.bits = bits;
+    event.delay_s = std::max(0.0, current_t - arrival_t);
+    event.ce = ce;
+    event.tx_dir = fate_tx_dir_;
+    event.queue_num = fate_queue_num_;
+    event.ue_id = fate_ue_id_;
+    notify_pkt_fate(event);
+}
+
 void packet_handler::record_error(std::uint64_t bits, bit_fate fate)
 {
     if(verbosity > 0) e_mean.add(bits);
@@ -265,10 +295,12 @@ std::unique_ptr<packet_handler> make_packet_handler(packet_handler_config cfg)
     if(cfg.ue_type == SIM_UE)
     {
         std::unique_ptr<packet_handler> handler(new simulated_packet_handler(cfg.ue_id, cfg.traffic_c, cfg.pdcp_c, seed, cfg.log_traffic));
+        handler->set_fate_identity(cfg.ue_id, cfg.tx_dir, -1);
         return handler;
     }
 
     assert(cfg.queue_num >= 0);
     std::unique_ptr<packet_handler> handler(new captured_packet_handler(cfg.queue_num, cfg.init_t, cfg.pdcp_c, seed, cfg.log_quality));
+    handler->set_fate_identity(cfg.ue_id, cfg.tx_dir, cfg.queue_num);
     return handler;
 }
