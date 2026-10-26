@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <netfilter/capture_annotation.h>
 #include <netfilter/netfilter_interface.h>
 #include <pkts/pkts.h>
 #include <utils/terminal_logging.h>
@@ -38,6 +39,9 @@ struct captured_packet_info
     uint64_t bytes = 0;
     uint32_t pkt_id = 0;
     uint8_t ecn = ECN_NOT_ECT;
+    // Filled by the registered packet annotators (capture_annotation.h); kind 0 and zeroed data
+    // when none recognised the packet.
+    ext_blob blob;
 };
 
 //--------------------------------------------------------------------------------------------------
@@ -293,6 +297,10 @@ protected:
         captured_packets.push_back(info);
     }
 
+    // Runs the same path as a packet arriving from the NFQUEUE reader thread, including the
+    // registered annotators, so that a capture double can feed packets without netfilter.
+    void handle_capture_from_double(const nfq_packet_metadata& meta) { handle_capture(meta); }
+
 private:
     void handle_capture(const nfq_packet_metadata& meta)
     {
@@ -300,6 +308,7 @@ private:
         info.bytes = meta.bytes;
         info.pkt_id = meta.pkt_id;
         info.ecn = meta.ecn;
+        annotate_packet(meta, info.blob);
         enqueue_captured_packet(info, meta.payload, meta.ecn);
     }
     mutable std::mutex mtx;

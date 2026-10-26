@@ -1,6 +1,6 @@
 # Extension Points
 
-FikoRE has three registries for research code that needs to add a scheduler metric, a runtime parameter, or per-TTI logic without editing the emulator sources. Each one is empty by default, and a run with nothing registered behaves as it did before the registries existed.
+FikoRE has three registries for research code that needs to add a scheduler metric, a runtime parameter, or per-TTI logic without editing the emulator sources. A fourth extension point, packet annotation, lets research code read captured packets at the NFQUEUE boundary. Each one is empty by default, and a run with nothing registered behaves as it did before they existed.
 
 A registration is a file-scope object in any translation unit that is linked into the binary. Link the object files directly, or force the linker to keep the unit: a static library drops a translation unit that nothing references, and its registrar never runs.
 
@@ -120,6 +120,59 @@ const registrar tick_counter_registration;
 - The factory receives the configuration file path, so that a controller can read a section of its own. The loader ignores unknown sections and unknown keys, although it still logs "added" for the keys it did not recognise.
 - A factory may return `nullptr` to stay out of a run.
 - An exception from `on_tick` ends the run. The message carries the controller name and the TTI.
+
+## Packet annotation
+
+Packet annotation reads captured packets. An annotator receives the bytes of one packet at the NFQUEUE boundary and fills a small fixed-size record, an `ext_blob`: 32 bytes of data and a 16-bit `kind`. An ingest observer receives that record together with the packet uid when the capture record becomes an `ip_pkt`. The emulator never interprets the record. `ip_pkt` and `harq_pkt` do not carry it, so everything downstream of `ingest` is unchanged; an observer that needs the annotation later keeps its own table keyed by uid.
+
+```cpp
+#include <atomic>
+#include <cstdint>
+
+#include <netfilter/capture_annotation.h>
+
+namespace
+{
+std::atomic<std::uint64_t> seen_ipv4_headers{0};
+
+// Reader thread: recognise a packet whose first byte is 0x45 (IPv4, 20-byte header) and keep that byte.
+bool annotate_first_byte(const nfq_packet_metadata &meta, ext_blob &blob)
+{
+    if (meta.payload.empty() || meta.payload[0] != 0x45)
+        return false;
+    blob.data[0] = meta.payload[0];
+    blob.kind = 1;
+    return true;
+}
+
+// UE phase thread, once per uid.
+void count_annotated(std::uint32_t /*uid*/, int /*tx_dir*/, int /*queue_num*/, const ext_blob &blob)
+{
+    if (blob.kind == 1)
+        seen_ipv4_headers.fetch_add(1, std::memory_order_relaxed);
+}
+
+struct registrar
+{
+    registrar()
+    {
+        register_annotator(&annotate_first_byte);
+        register_ingest_observer(&count_annotated);
+    }
+};
+const registrar registration;
+}
+```
+
+- **Annotators** are plain function pointers, called in registration order from `pkt_capture::handle_capture`, before the packet is enqueued. The first one that returns `true` wins and the rest are skipped. It should set a non-zero `kind`. When an annotator returns `false`, what it wrote to the blob is discarded, so a packet that nobody recognises keeps `kind == 0` and zeroed data. An annotator that throws is treated as not having recognised the packet; the exception is swallowed and counted in `annotator_failures()`.
+- **Observers** are plain function pointers with the signature `void(std::uint32_t uid, int tx_dir, int queue_num, const ext_blob &)`. They are called once per captured packet in `captured_packet_handler::ingest`, including packets with `kind == 0` and packets that the handler drops at once because its completion queue is full. An observer that throws is swallowed and counted in `ingest_observer_failures()`, and the observers after it still run.
+- **Freeze rule.** Register at start-up, typically from a file-scope object. The annotator list freezes at the first captured packet and the observer list at the first call of `captured_packet_handler::ingest`; a registration after that throws `std::logic_error`. A null function throws `std::invalid_argument` and a 17th entry in one list throws `std::length_error`. The reader threads read an immutable list with no lock, and there is no way to clear a registry in a running process.
+- **Annotators run on the NFQUEUE reader thread.** There is one such thread per queue, so one annotator can run on several threads at once. It must not allocate, must not wait, and must synchronise any state it shares. With nothing registered the capture path adds one atomic load per packet.
+- **Observers run on the thread that calls `ingest`**, which is the phase thread of the UE that owns the queue. They must not block. Keep their state per UE, or synchronise it.
+- **IPv4 only.** The capture is bound to `AF_INET`, and the payload is a whole IPv4 packet. IPv6 traffic is not captured.
+- **Read only.** An annotator sees the packet and cannot change it. The only write to a captured packet remains the CE codepoint of an `ACCEPT_CE` verdict. Verdicts, ECN handling and counters are the same with and without annotators registered.
+- `uid` is the NFQUEUE packet id, the same number that `ip_pkt::uid` carries. A capture record is popped once, so an observer sees a uid once, whatever fragments the packet is later split into.
+- `tx_dir` is the direction that the caller gave to `ingest`. During shutdown the handler drains the last packets with `TX_DL` whatever its direction, so an observer that needs the true direction should also use `queue_num`.
 
 ## Order within a TTI
 

@@ -87,8 +87,8 @@ void captured_packet_handler::quit()
 
 double captured_packet_handler::ingest(int tx_dir, double current_t)
 {
-    (void)tx_dir;
     (void)current_t;
+    const bool observed = freeze_ingest_observers() != 0;
     if(!pkt_cptr) return 0.0;
 
     (void)pkt_cptr->retry_pending_drops();
@@ -104,6 +104,12 @@ double captured_packet_handler::ingest(int tx_dir, double current_t)
         ip_pkt pkt(get_current_ts(), size, size, prev_uid, info.pkt_id, bh_d, bh_d_var);
         pkt.ecn = info.ecn;
         pkt.original_ecn = info.ecn;
+        if (observed)
+            notify_ingest_observers(
+                info.pkt_id,
+                tx_dir,
+                pkt_cptr->queue_num(),
+                info.blob);
         bits += pkt.size;
         if (completions.size() >= max_completion_states)
         {
