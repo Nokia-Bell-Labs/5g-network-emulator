@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <functional>
 #include <thread>
 #include <iostream>
@@ -74,11 +75,11 @@ public:
             run = true; 
             if(goal < 0)
             {
-                tickthread = std::thread(&timer::ticker_inf, this);
+                tickthread = std::thread(&timer::guarded, this, true);
             }
             else
             {
-                tickthread = std::thread(&timer::ticker, this);
+                tickthread = std::thread(&timer::guarded, this, false);
             }           
         }
     }
@@ -105,9 +106,18 @@ public:
         return &init_t; 
     }
 
+    // Joins the ticker thread. An exception that left the callback ended the loop and is
+    // rethrown here, once, on the thread that waits: an exception that escapes a thread
+    // function would call std::terminate. stop() and the destructor join without rethrowing.
     void wait_finished()
     {
         if(tickthread.joinable()) tickthread.join();
+        if(failure)
+        {
+            std::exception_ptr pending = failure;
+            failure = nullptr;
+            std::rethrow_exception(pending);
+        }
     }
     
     ts_us_t get_current_ts()
@@ -116,6 +126,21 @@ public:
     }
 
 private: 
+    // Thread body: runs the loop and keeps what the callback threw, so that wait_finished()
+    // can report it after the join.
+    void guarded(bool infinite)
+    {
+        try
+        {
+            if(infinite) ticker_inf(); else ticker();
+        }
+        catch(...)
+        {
+            failure = std::current_exception();
+            run = false;
+        }
+    }
+
     void ticker()
     {
         std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
@@ -191,4 +216,6 @@ private:
     std::atomic<bool> run{false};
     std::int64_t goal = 0; 
     bool do_wait = false; 
+    // Written by the ticker thread before it ends, read after the join.
+    std::exception_ptr failure;
 };
