@@ -46,13 +46,13 @@ public:
     int get_rbg_size();
     int get_logical_units();
     void init(std::vector<ue> *ue_list);
-    void step(float current_t);
+    void step(double current_t);
 
 public: 
     void flush_logs(); 
 
 private: 
-    void update_ts(float t);
+    void update_ts(double t);
 
 private: 
     grid grid_dl; 

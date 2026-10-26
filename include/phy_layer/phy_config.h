@@ -144,7 +144,7 @@ struct phy_ue_config
     phy_ue_config() {}
     phy_ue_config(float _alpha_ul, float _nominal_pusch_p0, ul_power_mode _ul_power_mode, float _tx_power_ul, int _cqi_period,
                   int _ri_period, int _n_antennas, float _ue_h, float _priority,
-                  float _delay_t, float _delta, float _beta, float _max_speed, float _scaling_factor,
+                  double _delay_t, float _delta, float _beta, float _max_speed, float _scaling_factor,
                   int _penetration_profile = PENETRATION_LEGACY_AUTO,
                   int _vehicle_profile = VEHICLE_STANDARD)
     {
@@ -179,7 +179,7 @@ struct phy_ue_config
     int ri_period;
     int n_antennas;
     float ue_h;
-    float delay_t;
+    double delay_t;
     float delta;
     float beta;
     float max_speed;

@@ -67,7 +67,7 @@ float max_metric_handler::get_value() const
 metric_handler::metric_handler(
     int _metric_type,
     float _bet_beta,
-    float _delay_t,
+    double _delay_t,
     float _delta,
     float _pf_alpha)
 {
@@ -79,7 +79,7 @@ metric_handler::metric_handler(
     delta = _delta; 
 }
 
-float metric_handler::get_metric(metric_info metric_i, float current_t, int f)
+float metric_handler::get_metric(metric_info metric_i, double current_t, int f)
 {
     return (this->*metric_f_ptr)(metric_i, current_t, f);
 }
@@ -107,7 +107,7 @@ void metric_handler::assign_throughput_recipe(float pf_alpha)
 
 float metric_handler::throughput(
     metric_info metric_i,
-    float current_t,
+    double current_t,
     int f)
 {
     (void)current_t;
@@ -126,22 +126,28 @@ float metric_handler::throughput(
     return numerator / denominator;
 }
 
-float metric_handler::fifo(metric_info metric_i, float current_t, int f)
+float metric_handler::fifo(metric_info metric_i, double current_t, int f)
 {
-    return current_t - metric_i.req_time;
+    return static_cast<float>(current_t - metric_i.req_time);
 }
 
-float metric_handler::dist_delay(metric_info metric_i, float current_t, int f)
+float metric_handler::dist_delay(metric_info metric_i, double current_t, int f)
 {
-    return 1/(metric_i.delay_t - metric_i.current_delay);
+    (void)current_t;
+    (void)f;
+    return static_cast<float>(
+        1.0 / (metric_i.delay_t - metric_i.current_delay));
 }
 
-float metric_handler::w_delay(metric_info metric_i, float current_t, int f)
+float metric_handler::w_delay(metric_info metric_i, double current_t, int f)
 {
-    return -(log(metric_i.delta)/metric_i.delay_t) * metric_i.current_delay;
+    (void)current_t;
+    (void)f;
+    return static_cast<float>(
+        -(log(metric_i.delta) / metric_i.delay_t) * metric_i.current_delay);
 }
 
-float metric_handler::rr(metric_info metric_i, float current_t, int f)
+float metric_handler::rr(metric_info metric_i, double current_t, int f)
 {
     return 0.0;
 }

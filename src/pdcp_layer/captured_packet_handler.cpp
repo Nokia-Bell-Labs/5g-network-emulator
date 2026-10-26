@@ -85,11 +85,11 @@ void captured_packet_handler::quit()
     pkt_cptr->close();
 }
 
-float captured_packet_handler::ingest(int tx_dir, float current_t)
+double captured_packet_handler::ingest(int tx_dir, double current_t)
 {
     (void)tx_dir;
     (void)current_t;
-    if(!pkt_cptr) return 0.0f;
+    if(!pkt_cptr) return 0.0;
 
     (void)pkt_cptr->retry_pending_drops();
     std::uint64_t bits = 0;
@@ -140,7 +140,7 @@ void captured_packet_handler::drop_ingress_pkt(ip_pkt pkt)
 void captured_packet_handler::push(harq_pkt pkt)
 {
     pkt.t_out += std::max(
-        0.0f,
+        0.0,
         pkt.backhaul_d
             + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
     for(std::deque<ip_pkt>::iterator jt = pkt.pkts.begin(); jt != pkt.pkts.end(); jt++)
@@ -221,7 +221,7 @@ float captured_packet_handler::release()
     return delivered_bits;
 }
 
-void captured_packet_handler::fill_queue_status(pdcp_queue_status& status, float current_t) const
+void captured_packet_handler::fill_queue_status(pdcp_queue_status& status, double current_t) const
 {
     packet_handler::fill_queue_status(status, current_t);
     if(pkt_cptr)
@@ -253,19 +253,19 @@ void captured_packet_handler::fill_queue_status(pdcp_queue_status& status, float
         if (oldest != completions.end())
         {
             status.release_oldest_uid = oldest->second.packet.uid;
-            status.release_oldest_age =
-                current_t - oldest->second.packet.ip_t;
+            status.release_oldest_age = static_cast<float>(
+                current_t - oldest->second.packet.ip_t);
         }
     }
     status.nfqueue_ce_rewrite_packets = ce_rewrite_packets;
     status.nfqueue_drop_packets = drop_packets;
 }
 
-float captured_packet_handler::get_current_ts() const
+double captured_packet_handler::get_current_ts() const
 {
     if(init_t == nullptr) return current_t;
-    return (float)(std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch() - *init_t).count()) * 0.000001f;
+    return static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch() - *init_t).count()) * 0.000001;
 }
 
 captured_packet_handler::completion_state &
@@ -294,7 +294,7 @@ captured_packet_handler::state_for(const ip_pkt &pkt)
 void captured_packet_handler::account_fragment(
     const ip_pkt &pkt,
     bit_fate fate,
-    float ready_time)
+    double ready_time)
 {
     completion_state &state = state_for(pkt);
     if (state.original_bits != pkt.original_size)
@@ -364,8 +364,8 @@ bool captured_packet_handler::release_state(
     {
         delivered_bits += static_cast<float>(state.original_bits);
         delivered_bits_total_ += state.original_bits;
-        l_mean.add(current_t - state.packet.current_t);
-        ipl_mean.add(current_t - state.packet.ip_t);
+        l_mean.add(static_cast<float>(current_t - state.packet.current_t));
+        ipl_mean.add(static_cast<float>(current_t - state.packet.ip_t));
         l_mean.step();
         ipl_mean.step();
         if (final == final_packet_verdict::ACCEPT_CE)

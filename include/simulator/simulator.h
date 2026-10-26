@@ -27,7 +27,7 @@ public:
 
 public: 
 
-    void override_duration(float _duration);
+    void override_duration(double _duration);
 
     void start();
 
@@ -79,7 +79,7 @@ private:
 private: 
     timer ticker; 
 private: 
-    float duration;
+    double duration;
 private: 
     int verbosity = 0; 
     bool runtime_started = false;
@@ -87,8 +87,8 @@ private:
     run_exit_code exit_code_ = run_exit_code::ok;
     run_stop_reason stop_reason_ = run_stop_reason::none;
     std::chrono::steady_clock::time_point runtime_start_tp;
-    float progress_log_period_s = 0.0f;
-    float next_progress_log_sim_time_s = 0.0f;
+    double progress_log_period_s = 0.0;
+    double next_progress_log_sim_time_s = 0.0;
 
 };
 #endif

@@ -36,9 +36,9 @@ int checked_rbg_index(int rbg_prbs)
 }
 } // namespace
 
-harq_handler::harq_handler(int _max_rtx, float _air_delay,
-                 float _rtx_period, float _rtx_period_var,
-                 float _rtx_p_delay, float _rtx_p_delay_var,
+harq_handler::harq_handler(int _max_rtx, double _air_delay,
+                 double _rtx_period, double _rtx_period_var,
+                 double _rtx_p_delay, double _rtx_p_delay_var,
                  unsigned int _seed, int _verbosity,
                  harq_model _model, std::size_t _max_queue_blocks)
     : max_rtx(_max_rtx),
@@ -59,20 +59,20 @@ harq_handler::harq_handler(int _max_rtx, float _air_delay,
         throw std::invalid_argument("max_rtx must be non-negative");
     if (max_queue_blocks == 0)
         throw std::invalid_argument("HARQ queue capacity must be positive");
-    for (float value : {
+    for (double value : {
              air_delay_var,
              rtx_period,
              rtx_period_var,
              rtx_p_delay,
              rtx_p_delay_var})
     {
-        if (!std::isfinite(value) || value < 0.0f)
+        if (!std::isfinite(value) || value < 0.0)
             throw std::invalid_argument(
                 "HARQ delays must be finite and non-negative seconds");
     }
 }
 
-void harq_handler::step(float t)
+void harq_handler::step(double t)
 {
     if (!std::isfinite(t))
         throw std::invalid_argument("HARQ time must be finite");
@@ -114,7 +114,7 @@ harq_pkt harq_handler::get_pkt()
     return pkt;
 }
 
-bool harq_handler::pop_pkt_older_than(float oldest_allowed_ip_t, harq_pkt& out_pkt)
+bool harq_handler::pop_pkt_older_than(double oldest_allowed_ip_t, harq_pkt& out_pkt)
 {
     for(std::deque<harq_pkt>::iterator it = harq_buffer.begin(); it != harq_buffer.end(); ++it)
     {
@@ -128,7 +128,7 @@ bool harq_handler::pop_pkt_older_than(float oldest_allowed_ip_t, harq_pkt& out_p
     return false;
 }
 
-float harq_handler::get_oldest_t() const
+double harq_handler::get_oldest_t() const
 {
     return harq_buffer.empty()
                ? current_t
@@ -154,21 +154,21 @@ std::uint64_t harq_handler::queued_bits() const
     return bits;
 }
 
-float harq_handler::emulate_ack_delay(float distance)
+double harq_handler::emulate_ack_delay(float distance)
 {
-    const float propagation = std::max(
-        0.0f,
-        static_cast<float>(2.0 * distance / SPEED_OF_LIGHT)
-            + air_delay_var * signed_unit(air_delay_generator));
-    const float feedback = std::max(
-        0.0f,
+    const double propagation = std::max(
+        0.0,
+        2.0 * static_cast<double>(distance) / SPEED_OF_LIGHT
+            + air_delay_var * static_cast<double>(signed_unit(air_delay_generator)));
+    const double feedback = std::max(
+        0.0,
         rtx_period
-            + rtx_period_var * signed_unit(rtx_period_generator));
-    const float processing = std::max(
-        0.0f,
+            + rtx_period_var * static_cast<double>(signed_unit(rtx_period_generator)));
+    const double processing = std::max(
+        0.0,
         rtx_p_delay
             + rtx_p_delay_var
-                * signed_unit(processing_delay_generator));
+                * static_cast<double>(signed_unit(processing_delay_generator)));
     return propagation + feedback + processing;
 }
 

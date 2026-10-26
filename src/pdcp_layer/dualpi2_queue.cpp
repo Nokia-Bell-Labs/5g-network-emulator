@@ -25,7 +25,7 @@ void dualpi2_queue::configure(dualpi2_config _cfg)
     p_cl = 0.0f;
     p_c = 0.0f;
     p_l_last = 0.0f;
-    prev_q = 0.0f;
+    prev_q = 0.0;
     next_update_t = current_t;
 }
 
@@ -77,7 +77,7 @@ bool dualpi2_queue::pop_next(ip_pkt& pkt)
 
         if(is_l4s(pkt))
         {
-            float p_l = std::max(laqm(std::max(0.0f, current_t - pkt.current_t)), p_cl);
+            float p_l = std::max(laqm(std::max(0.0, current_t - pkt.current_t)), p_cl);
             p_l = std::min(std::max(p_l, 0.0f), cfg.p_lmax);
             p_l_last = p_l;
             if(mark_likelihood(p_l)) mark_ce(pkt);
@@ -147,13 +147,13 @@ const ip_pkt* dualpi2_queue::peek_oldest() const
     return l_head->current_t <= c_head->current_t ? l_head : c_head;
 }
 
-float dualpi2_queue::oldest_timestamp(float fallback_t) const
+double dualpi2_queue::oldest_timestamp(double fallback_t) const
 {
     const ip_pkt* pkt = peek_oldest();
     return pkt == nullptr ? fallback_t : pkt->current_t;
 }
 
-void dualpi2_queue::step(float _current_t)
+void dualpi2_queue::step(double _current_t)
 {
     current_t = _current_t;
     maybe_update_pi();
@@ -210,17 +210,17 @@ bool dualpi2_queue::is_l4s(const ip_pkt& pkt) const
     return pkt.ecn == ECN_ECT1 || pkt.ecn == ECN_CE;
 }
 
-float dualpi2_queue::queue_delay(const std::deque<ip_pkt>& q) const
+double dualpi2_queue::queue_delay(const std::deque<ip_pkt>& q) const
 {
-    if(q.empty()) return 0.0f;
-    return std::max(0.0f, current_t - q.front().current_t);
+    if(q.empty()) return 0.0;
+    return std::max(0.0, current_t - q.front().current_t);
 }
 
-float dualpi2_queue::laqm(float qdelay) const
+float dualpi2_queue::laqm(double qdelay) const
 {
     if(qdelay <= cfg.min_th_s) return 0.0f;
     if(cfg.range_s <= 0.0f) return cfg.p_lmax;
-    return std::min(cfg.p_lmax, (qdelay - cfg.min_th_s) / cfg.range_s);
+    return std::min(cfg.p_lmax, static_cast<float>((qdelay - cfg.min_th_s) / cfg.range_s));
 }
 
 bool dualpi2_queue::mark_likelihood(float probability)
@@ -270,14 +270,16 @@ void dualpi2_queue::update_snapshot()
 
 void dualpi2_queue::maybe_update_pi()
 {
-    float tupdate = std::min(cfg.target_s, cfg.rtt_max_s / 3.0f);
-    if(tupdate <= 0.0f) tupdate = 0.001f;
+    double tupdate = std::min(cfg.target_s, cfg.rtt_max_s / 3.0);
+    if(tupdate <= 0.0) tupdate = 0.001;
     if(current_t < next_update_t) return;
 
-    float curq = std::max(queue_delay(l_queue), queue_delay(c_queue));
-    float alpha = 0.1f * tupdate / (cfg.rtt_max_s * cfg.rtt_max_s);
-    float beta = 0.3f / cfg.rtt_max_s;
-    p_base += alpha * (curq - cfg.target_s) + beta * (curq - prev_q);
+    double curq = std::max(queue_delay(l_queue), queue_delay(c_queue));
+    // The controller gains and the delay error are delays and stay in double; only the
+    // resulting probability increment is narrowed to the float state.
+    const double alpha = 0.1 * tupdate / (cfg.rtt_max_s * cfg.rtt_max_s);
+    const double beta = 0.3 / cfg.rtt_max_s;
+    p_base += static_cast<float>(alpha * (curq - cfg.target_s) + beta * (curq - prev_q));
     p_base = std::min(std::max(p_base, 0.0f), 1.0f);
     p_cl = std::min(std::max(p_base * cfg.k, 0.0f), 1.0f);
     p_c = std::min(std::max(p_base * p_base, 0.0f), 1.0f);

@@ -32,21 +32,21 @@
 class harq_handler
 {
 public: 
-    harq_handler(int _max_rtx, float _air_delay, 
-                 float _rtx_period, float _rtx_period_var, 
-                 float _rtx_p_delay, float _rtx_p_delay_var,
+    harq_handler(int _max_rtx, double _air_delay, 
+                 double _rtx_period, double _rtx_period_var, 
+                 double _rtx_p_delay, double _rtx_p_delay_var,
                  unsigned int _seed, int _verbosity = 0,
                  harq_model _model = harq_model::legacy_bler,
                  std::size_t _max_queue_blocks = 4096);
 private: 
     int max_rtx; 
-    float air_delay_var;
-    float rtx_p_delay; 
-    float rtx_p_delay_var;
-    float rtx_period; 
-    float rtx_period_var; 
+    double air_delay_var;
+    double rtx_p_delay; 
+    double rtx_p_delay_var;
+    double rtx_period; 
+    double rtx_period_var; 
     std::deque<harq_pkt> harq_buffer; 
-    float current_t = 0.0;
+    double current_t = 0.0;
     int verbosity = 0; 
 
     int mod_i; 
@@ -64,15 +64,15 @@ private:
     std::uniform_real_distribution<float> signed_unit{-1.0f, 1.0f};
     std::deque<double> scripted_outcomes;
 public: 
-    void step(float t);
+    void step(double t);
     bool enqueue_retry(
         harq_pkt &pkt,
         float distance,
         int retry_ordinal);
     bool is_pkt_ready() const;
     harq_pkt get_pkt();
-    bool pop_pkt_older_than(float oldest_allowed_ip_t, harq_pkt& out_pkt);
-    float get_oldest_t() const;
+    bool pop_pkt_older_than(double oldest_allowed_ip_t, harq_pkt& out_pkt);
+    double get_oldest_t() const;
     bool get_rtx(int mcs, float sinr, int attempt_ordinal, int layers);
     void init(int _mod_i, int _rbg_prbs);
     int size() const { return (int)harq_buffer.size(); }
@@ -99,6 +99,6 @@ public:
         float sinr);
 
 private: 
-    float emulate_ack_delay(float distance);
+    double emulate_ack_delay(float distance);
     double draw_outcome();
 };

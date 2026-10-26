@@ -27,8 +27,8 @@ public:
     bool pop_dropped_pkt(ip_pkt& pkt);
     bool pop_oldest(ip_pkt& pkt);
     const ip_pkt* peek_oldest() const;
-    float oldest_timestamp(float current_t) const;
-    void step(float current_t);
+    double oldest_timestamp(double current_t) const;
+    void step(double current_t);
     void clear();
 
     int size() const;
@@ -39,8 +39,8 @@ public:
 
 private:
     bool is_l4s(const ip_pkt& pkt) const;
-    float queue_delay(const std::deque<ip_pkt>& q) const;
-    float laqm(float qdelay) const;
+    double queue_delay(const std::deque<ip_pkt>& q) const;
+    float laqm(double qdelay) const;
     bool mark_likelihood(float probability);
     bool choose_l4s() const;
     void mark_ce(ip_pkt& pkt);
@@ -55,15 +55,15 @@ private:
     std::deque<ip_pkt> dropped_queue;
     std::uint64_t l_bits = 0;
     std::uint64_t c_bits = 0;
-    float current_t = 0.0f;
+    double current_t = 0.0;
 
     float p_base = 0.0f;
     float p_cl = 0.0f;
     float p_c = 0.0f;
     float p_l_last = 0.0f;
-    float prev_q = 0.0f;
-    float next_update_t = 0.0f;
-    float last_classic_dequeue_t = 0.0f;
+    double prev_q = 0.0;
+    double next_update_t = 0.0;
+    double last_classic_dequeue_t = 0.0;
 
     dualpi2_stats total_stats;
     dualpi2_stats interval_stats;

@@ -7,8 +7,8 @@
 #include <mobility_models/mobility_model_base.h>
 
 mobility_model_base::mobility_model_base(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var,
-                                         float _max_distance, float _time_target, float maxApothem,
-                                         float _time_target_var, bool _random_v)
+                                         float _max_distance, double _time_target, float maxApothem,
+                                         double _time_target_var, bool _random_v)
     : uniform_gen(rng_seed(_random_v, RNG_MOBILITY, (std::uint64_t)id))
 {
     max_distance = _max_distance;
@@ -112,7 +112,7 @@ void mobility_model_base::set_random_initial_position(float max_apothem)
     current_pos = pos2d(new_x, new_y);
 }
 
-void mobility_model_base::update_pos(float current_t) {}
+void mobility_model_base::update_pos(double current_t) {}
 
 float mobility_model_base::get_current_d()
 {

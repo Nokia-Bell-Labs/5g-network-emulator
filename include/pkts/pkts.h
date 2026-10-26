@@ -20,13 +20,13 @@ enum ecn_codepoint
 struct ip_pkt
 {
     ip_pkt(
-        float _current_t,
+        double _current_t,
         std::uint64_t _size,
         std::uint64_t _original_size,
         int _prev_uid,
         int _uid,
-        float _backhaul_d,
-        float _backhaul_d_var)
+        double _backhaul_d,
+        double _backhaul_d_var)
     {
         current_t = _current_t; 
         ip_t = _current_t; 
@@ -41,12 +41,12 @@ struct ip_pkt
     };
 
     ip_pkt(
-        float _current_t,
+        double _current_t,
         std::uint64_t _size,
         std::uint64_t _original_size,
         int _uid,
-        float _backhaul_d,
-        float _backhaul_d_var)
+        double _backhaul_d,
+        double _backhaul_d_var)
     {
         current_t = _current_t; 
         ip_t = _current_t; 
@@ -88,9 +88,9 @@ struct ip_pkt
         return size == original_size;
     }
 
-    float current_t; 
-    float ip_t; 
-    float t_out; 
+    double current_t; 
+    double ip_t; 
+    double t_out; 
     std::uint64_t size;
     std::uint64_t original_size;
     uint32_t uid; 
@@ -98,8 +98,8 @@ struct ip_pkt
     bool is_fragment;
     int frags_created = 0;
     int frags_recovered = 0;
-    float backhaul_d; 
-    float backhaul_d_var; 
+    double backhaul_d; 
+    double backhaul_d_var; 
     bool is_head = true; 
     bool erase = false; 
     uint8_t ecn = ECN_NOT_ECT;
@@ -123,13 +123,13 @@ struct harq_pkt
 {
     harq_pkt(
         int _id,
-        float _ip_t,
-        float c_t,
+        double _ip_t,
+        double c_t,
         int mcs,
         float _distance,
         std::uint64_t _bits,
-        float _backhaul_d,
-        float _backhaul_d_var)
+        double _backhaul_d,
+        double _backhaul_d_var)
     {
         id = _id; 
         current_t = c_t; 
@@ -150,21 +150,21 @@ struct harq_pkt
         pkts.clear();
     }
     
-    void set_delay(float delay)
+    void set_delay(double delay)
     {
         t_out = current_t + delay;
     }
-    float ip_t = 0.0;
-    float current_t = 0.0; 
+    double ip_t = 0.0;
+    double current_t = 0.0; 
     float distance = 0.0;
     bool dropped = false; 
     int attempt_ordinal = 0;
-    float t_out = 0.0; 
+    double t_out = 0.0; 
     int mcs_i = -1; 
     int layers = 1;
     std::uint64_t bits = 0;
-    float backhaul_d = 0.0; 
-    float backhaul_d_var = 0.0; 
+    double backhaul_d = 0.0; 
+    double backhaul_d_var = 0.0; 
     int id = -1;
     std::deque<ip_pkt> pkts;
 };

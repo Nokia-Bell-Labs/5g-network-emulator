@@ -831,7 +831,7 @@ void phy_layer::set_logger(log_handler *_logger)
     logger = _logger;
 }
 
-void phy_layer::prepare_metrics(float oldest_t, float avg_tp)
+void phy_layer::prepare_metrics(double oldest_t, float avg_tp)
 {
     // Get UE info for metrics
     metric_i.req_time = oldest_t;
@@ -974,7 +974,7 @@ void phy_layer::init_update_rates(float _doppler_f, int _cqi_p, int _ri_p)
     }
 }
 
-void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float _macro_fading, int _o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t, float _sinr_offset_db)
+void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float _macro_fading, int _o2i, int _tx_dir, const pos2d &pos, double oldest_t, float avg_tp, double _current_t, float _sinr_offset_db)
 {
     // doppler_f = freq * _speed / LIGHTSPEED;
 

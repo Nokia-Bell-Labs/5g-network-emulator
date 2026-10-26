@@ -25,8 +25,8 @@ packet_handler::packet_handler(pdcp_config pdcp_c, unsigned int seed, int _verbo
     bh_d_var = pdcp_c.bh_d_var;
     if (!std::isfinite(bh_d)
         || !std::isfinite(bh_d_var)
-        || bh_d < 0.0f
-        || bh_d_var < 0.0f)
+        || bh_d < 0.0
+        || bh_d_var < 0.0)
         throw std::invalid_argument(
             "backhaul delays must be finite and non-negative seconds");
     verbosity = _verbosity;
@@ -44,7 +44,7 @@ void packet_handler::quit()
 {
 }
 
-void packet_handler::step(float t)
+void packet_handler::step(double t)
 {
     tp_mean.step();
     g_mean.step();
@@ -81,7 +81,7 @@ void packet_handler::push(harq_pkt pkt)
         return;
     }
     pkt.t_out += std::max(
-        0.0f,
+        0.0,
         pkt.backhaul_d
             + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
     pkt_list.push_back(std::move(pkt));
@@ -108,8 +108,8 @@ float packet_handler::release()
 {
     int count = 0;
     std::uint64_t bits = 0;
-    float latency = 0;
-    float ip_latency = 0;
+    double latency = 0;
+    double ip_latency = 0;
     for(std::deque<harq_pkt>::iterator it=pkt_list.begin(); it!=pkt_list.end();)
     {
         if(it->t_out <= current_t)
@@ -128,8 +128,8 @@ float packet_handler::release()
     }
     if(count > 0)
     {
-        l_mean.add(latency/count);
-        ipl_mean.add(ip_latency/count);
+        l_mean.add(static_cast<float>(latency / count));
+        ipl_mean.add(static_cast<float>(ip_latency / count));
         l_mean.step();
         ipl_mean.step();
     }
@@ -137,7 +137,7 @@ float packet_handler::release()
     return bits;
 }
 
-void packet_handler::fill_queue_status(pdcp_queue_status& status, float current_t) const
+void packet_handler::fill_queue_status(pdcp_queue_status& status, double current_t) const
 {
     status.release_size = (int)pkt_list.size();
     status.release_high_water =
@@ -146,7 +146,8 @@ void packet_handler::fill_queue_status(pdcp_queue_status& status, float current_
     {
         const harq_pkt &pkt = pkt_list.front();
         status.release_oldest_uid = pkt.id;
-        status.release_oldest_age = current_t - pkt.ip_t;
+        status.release_oldest_age =
+            static_cast<float>(current_t - pkt.ip_t);
     }
     status.final_accept_packets = final_accept_packets_interval;
     status.final_accept_ce_packets = final_accept_ce_packets_interval;

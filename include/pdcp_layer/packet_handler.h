@@ -83,8 +83,8 @@ public:
 
     virtual void init();
     virtual void quit();
-    virtual void step(float t);
-    virtual float ingest(int tx_dir, float current_t) = 0;
+    virtual void step(double t);
+    virtual double ingest(int tx_dir, double current_t) = 0;
     bool has_ingress_pkts() const;
     ip_pkt pop_ingress_pkt();
     virtual void drop_ingress_pkt(ip_pkt pkt);
@@ -96,7 +96,7 @@ public:
     // fills pkt_list, so for it this is a no-op and the netfilter verdicts are untouched.
     virtual void flush_released();
     virtual float release();
-    virtual void fill_queue_status(pdcp_queue_status& status, float current_t) const;
+    virtual void fill_queue_status(pdcp_queue_status& status, double current_t) const;
     virtual std::uint64_t pending_release_bits() const;
     std::uint64_t pending_ingress_bits() const;
 
@@ -178,9 +178,9 @@ protected:
     std::deque<harq_pkt> pkt_list;
     std::size_t release_high_water_ = 0;
     static constexpr std::size_t max_release_blocks_ = 65536;
-    float current_t = 0;
-    float bh_d = 0;
-    float bh_d_var = 0;
+    double current_t = 0;
+    double bh_d = 0;
+    double bh_d_var = 0;
     int verbosity = 0;
 
     mean_handler<float> tp_mean;

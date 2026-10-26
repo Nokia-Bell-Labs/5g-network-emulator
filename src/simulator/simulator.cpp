@@ -51,13 +51,13 @@ simulator::simulator(std::string config_file)
     cell.numerology = config_loader.get_mac_config().numerology;
     cell.n_freq_rbg = mac_l.get_n_freq_rbg();
     cell.metric_type = config_loader.get_mac_config().metric_type;
-    cell.period_ms = config_loader.get_period();
-    cell.duration_s = duration;
+    cell.period_ms = static_cast<float>(config_loader.get_period());
+    cell.duration_s = static_cast<float>(duration);
     cell.map_file = scenario_c.map_file;
     control.init(config_loader.get_control_config(), ue_h.get_ue_list(), cell);
 }
 
-void simulator::override_duration(float _duration)
+void simulator::override_duration(double _duration)
 {
     duration = _duration;
 }

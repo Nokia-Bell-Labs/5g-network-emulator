@@ -38,7 +38,7 @@ class timer
 public: 
     using ts_us_t = std::uint64_t;
 
-    timer(float _period, float _goal = -1)
+    timer(double _period, double _goal = -1)
     {
         if(_period > 0)
         {

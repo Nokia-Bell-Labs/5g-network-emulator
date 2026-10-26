@@ -126,7 +126,7 @@ public:
     // which also shifts the reported RSRP: an offset standing for power or losses moves
     // both. Stored in a member for the duration of the call instead of threaded through
     // estimate_sinr; only this UE's own thread is inside estimate_channel_state.
-    void estimate_channel_state(float distance, phy_shared &phy_s, float macro_fading, int o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t, float sinr_offset_db);
+    void estimate_channel_state(float distance, phy_shared &phy_s, float macro_fading, int o2i, int _tx_dir, const pos2d &pos, double oldest_t, float avg_tp, double _current_t, float sinr_offset_db);
 
 private:
     void init_metric(int _index);
@@ -166,7 +166,7 @@ private:
     float compute_rayleigh();
     void estimate_metric(int f);
     void estimate_tp(int f);
-    void prepare_metrics(float oldest_t, float avg_tp);
+    void prepare_metrics(double oldest_t, float avg_tp);
     float standalone_rate_bits_per_tti() const;
     float throughput_metric_average() const;
     int get_modulation_index();
@@ -336,7 +336,7 @@ private:
     int current_ri;
 
 private:
-    float current_t;
+    double current_t;
 
 private:
     int id;

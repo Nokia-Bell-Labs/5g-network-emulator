@@ -128,13 +128,13 @@ void mac_layer::flush_logs()
     }
 }
 
-void mac_layer::update_ts(float t)
+void mac_layer::update_ts(double t)
 {
     grid_dl.add_current_ts(t);
     grid_ul.add_current_ts(t);
 }
 
-void mac_layer::step(float current_t)
+void mac_layer::step(double current_t)
 {  
 
     update_ts(current_t);    

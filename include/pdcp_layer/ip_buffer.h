@@ -28,9 +28,9 @@ public:
     ip_buffer(int _verbosity = 0);
 private: 
     std::deque<ip_pkt> pkt_list; 
-    float current_t; 
+    double current_t; 
     int current_id = 0; 
-    float oldest_t = 0; 
+    double oldest_t = 0; 
     int verbosity = 0; 
 
 private: 
@@ -44,16 +44,16 @@ private:
     int generated_pkts_total = 0;
 
 public: 
-    float get_oldest_timestamp();
+    double get_oldest_timestamp();
     bool has_pkts();
     void generate(
         std::uint64_t bits,
         std::uint64_t pkt_size,
-        float t,
-        float bh_d,
-        float bh_d_var);
+        double t,
+        double bh_d,
+        double bh_d_var);
     std::uint64_t drop_pkt(std::uint64_t bits);
-    void step(float _current_t);
+    void step(double _current_t);
     std::uint64_t get_pkts(std::uint64_t bits, harq_pkt& pkt);
     bool pop_oldest_pkt(harq_pkt& pkt);
     const ip_pkt* peek_oldest_pkt() const;
@@ -84,5 +84,5 @@ private:
     bool backend_pop_oldest(ip_pkt& pkt);
     void backend_requeue_front(ip_pkt pkt);
     const ip_pkt* backend_peek_oldest() const;
-    float backend_oldest_timestamp() const;
+    double backend_oldest_timestamp() const;
 };

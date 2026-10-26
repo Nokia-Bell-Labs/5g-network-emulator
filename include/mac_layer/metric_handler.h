@@ -39,12 +39,12 @@ public:
 
 // Stores the metric info
 struct metric_info{
-    float req_time = 0; 
+    double req_time = 0; 
     float avrg_tp = 0; 
     float current_tp = 0; 
-    float current_delay = 0; 
+    double current_delay = 0; 
     float delta = 0.001; 
-    float delay_t = 0.1; 
+    double delay_t = 0.1; 
     int index = 0; 
 };
 
@@ -66,7 +66,7 @@ public:
     metric_handler(
         int _metric_type,
         float _bet_beta = 0.9,
-        float _delay_t = 0.001,
+        double _delay_t = 0.001,
         float _delta = 0.8,
         float _pf_alpha = 1.0);
 private: 
@@ -74,15 +74,15 @@ private:
     int prev_f = -1; 
     int metric_t; 
     throughput_metric_recipe throughput_recipe;
-    float delay_t; 
+    double delay_t; 
     float delta;
-    typedef float (metric_handler::*f_ptr)(metric_info metric_i , float current_t, int f);
+    typedef float (metric_handler::*f_ptr)(metric_info metric_i , double current_t, int f);
     f_ptr metric_f_ptr;
 
 public: 
     void add_ue(std::string id);  
     void remove_ue(std::string id);
-    float get_metric(metric_info metric_i, float current_t, int f);
+    float get_metric(metric_info metric_i, double current_t, int f);
     // rank/n_enabled are the dense position of the UE among the enabled ones and how many
     // are enabled, not the UE id and the total count: a disabled UE must not take a turn.
     float get_rr_metric(int f, int rank, int n_enabled);
@@ -95,11 +95,11 @@ public:
 private: 
     void assign_metric();
     void assign_throughput_recipe(float pf_alpha);
-    float throughput(metric_info metric_i, float current_t, int f);
-    float fifo(metric_info metric_i, float current_t, int f);
-    float dist_delay(metric_info metric_i, float current_t, int f);
-    float w_delay(metric_info metric_i, float current_t, int f);
-    float rr(metric_info metric_i, float current_t, int f);
+    float throughput(metric_info metric_i, double current_t, int f);
+    float fifo(metric_info metric_i, double current_t, int f);
+    float dist_delay(metric_info metric_i, double current_t, int f);
+    float w_delay(metric_info metric_i, double current_t, int f);
+    float rr(metric_info metric_i, double current_t, int f);
     int check_metric(int metric);
 };
 

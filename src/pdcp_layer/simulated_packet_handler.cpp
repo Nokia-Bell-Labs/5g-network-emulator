@@ -90,7 +90,7 @@ bool simulated_packet_handler::inject_bits(
 
 void simulated_packet_handler::packetize(
     std::uint64_t bits,
-    float current_t,
+    double current_t,
     std::uint32_t tag,
     std::uint8_t ecn)
 {
@@ -150,7 +150,7 @@ std::uint64_t simulated_packet_handler::quantize_generated_bits(float bits)
     return whole_bits;
 }
 
-float simulated_packet_handler::ingest(int tx_dir, float current_t)
+double simulated_packet_handler::ingest(int tx_dir, double current_t)
 {
     const float generated_sample =
         traffic_m->generate(tx_dir, current_t);
@@ -208,8 +208,8 @@ float simulated_packet_handler::release()
 {
     int count = 0;
     std::uint64_t bits = 0;
-    float latency = 0.0f;
-    float ip_latency = 0.0f;
+    double latency = 0.0;
+    double ip_latency = 0.0;
     for(std::deque<harq_pkt>::iterator it = pkt_list.begin(); it != pkt_list.end();)
     {
         if(it->t_out <= current_t)
@@ -228,8 +228,8 @@ float simulated_packet_handler::release()
     }
     if(count > 0)
     {
-        l_mean.add(latency/count);
-        ipl_mean.add(ip_latency/count);
+        l_mean.add(static_cast<float>(latency / count));
+        ipl_mean.add(static_cast<float>(ip_latency / count));
         l_mean.step();
         ipl_mean.step();
     }

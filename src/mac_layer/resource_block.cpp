@@ -45,7 +45,7 @@ bool rb::check_ue_assignment()
     return false; 
 }
  
-void rb::estimate_params(int syms, float _current_t, int n_enabled)
+void rb::estimate_params(int syms, double _current_t, int n_enabled)
 {
     int index = 0; 
     current_t = _current_t;

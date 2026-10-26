@@ -40,7 +40,7 @@ public:
     mobility_model& operator=(const mobility_model&) = delete;
 
 public:
-    void update_pos(float t);
+    void update_pos(double t);
     void set_initial_position(float _max_apothem);
     float get_distance();
 

@@ -77,7 +77,7 @@ public:
     int get_n_sc_rbg(); 
     int get_rbg_size(); 
     int get_logical_units();
-    void add_current_ts(float t);
+    void add_current_ts(double t);
     void init(std::vector<ue> * ue_list);
     float assignRFBandwidth(float bandwidth); 
     void step();
@@ -121,7 +121,7 @@ private:
     std::string log_id; 
     log_handler * logger; 
     int verbosity = 0; 
-    float current_t = 0; 
+    double current_t = 0; 
     std::vector<ue> *ue_list = nullptr;
     grid_step_metrics last_step_metrics;
 };

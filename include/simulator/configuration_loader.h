@@ -193,10 +193,10 @@ public:
 
     void load(std::string cfg_file);
 
-    float get_period();
-    float get_duration();
+    double get_period();
+    double get_duration();
     std::uint64_t get_seed();
-    float get_progress_log_period_s();
+    double get_progress_log_period_s();
     std::list<ue_full_config> get_ue_c_list();
     phy_enb_config get_phy_enb_config();
     pdcp_config get_pdcp_config_ul();
@@ -222,12 +222,12 @@ public:
     control_config get_control_config();
 
 private:
-    float duration = DURATION_DEFAULT;
-    float period = PERIOD_DEFAULT;
+    double duration = DURATION_DEFAULT;
+    double period = PERIOD_DEFAULT;
     // Run seed. 0 means "not set": random_v then decides between the wall clock and a
     // reproducible run. See utils/rng_seed.h.
     std::uint64_t seed = 0;
-    float progress_log_period_s = PROGRESS_LOG_PERIOD_S_DEFAULT;
+    double progress_log_period_s = PROGRESS_LOG_PERIOD_S_DEFAULT;
     // UE CONFIG
     std::list<ue_full_config> ue_c_list;
     // ENB CONFIG
@@ -249,28 +249,28 @@ private:
     float UT_gain = UT_GAIN_DEFAULT;
     float power_boost = POWER_BOOST_DEFAULT;
     // PDCP_CONFIG
-    float backhaul_d = BACKHAUL_D_DEFAULT;
-    float backhaul_d_var = BACKHAUL_D_VAR_DEFAULT;
+    double backhaul_d = BACKHAUL_D_DEFAULT;
+    double backhaul_d_var = BACKHAUL_D_VAR_DEFAULT;
     bool order_pkts = DEFAULT_ORDER_PKTS;
     harq_model harq_model_value = harq_model::legacy_bler;
     // PDCP UL CONFIG
     int max_rtx_ul = MAX_RTX_DEFAULT;
-    float air_delay_var_ul = AIR_DELAY_VAR_DEFAULT;
-    float rtx_period_ul = RTX_PERIOD_DEFAULT;
-    float rtx_period_var_ul = RTX_PERIOD_VAR_DEFAULT;
-    float rtx_proc_delay_ul = RTX_PROC_DELAY_DEFAULT;
-    float rtx_proc_delay_var_ul = RTX_PROC_DELAY_VAR_DEFAULT;
+    double air_delay_var_ul = AIR_DELAY_VAR_DEFAULT;
+    double rtx_period_ul = RTX_PERIOD_DEFAULT;
+    double rtx_period_var_ul = RTX_PERIOD_VAR_DEFAULT;
+    double rtx_proc_delay_ul = RTX_PROC_DELAY_DEFAULT;
+    double rtx_proc_delay_var_ul = RTX_PROC_DELAY_VAR_DEFAULT;
     // PDCP DL CONFIG
     int max_rtx_dl = MAX_RTX_DEFAULT;
-    float air_delay_var_dl = AIR_DELAY_VAR_DEFAULT;
-    float rtx_period_dl = RTX_PERIOD_DEFAULT;
-    float rtx_period_var_dl = RTX_PERIOD_VAR_DEFAULT;
+    double air_delay_var_dl = AIR_DELAY_VAR_DEFAULT;
+    double rtx_period_dl = RTX_PERIOD_DEFAULT;
+    double rtx_period_var_dl = RTX_PERIOD_VAR_DEFAULT;
 
     // Monitoring
     monitoring_config monitoring_c;
     control_config control_c;
-    float rtx_proc_delay_dl = RTX_PROC_DELAY_DEFAULT;
-    float rtx_proc_delay_var_dl = RTX_PROC_DELAY_VAR_DEFAULT;
+    double rtx_proc_delay_dl = RTX_PROC_DELAY_DEFAULT;
+    double rtx_proc_delay_var_dl = RTX_PROC_DELAY_VAR_DEFAULT;
     // METRIC COFIGURATION
     int metric_type = DEFAULT_METRIC;
     float pf_alpha = PF_ALPHA_DEFAULT;

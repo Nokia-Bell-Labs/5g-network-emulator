@@ -139,11 +139,11 @@ private:
     int dumb_t = 1; 
     float last_tp_ul = 0.0;
     double last_t_ul = 0.0;
-    float t_acc_ul = 0.0;
+    double t_acc_ul = 0.0;
 
 private: 
     float last_tp_dl = 0.0;
     double last_t_dl = 0.0;
-    float t_acc_dl = 0.0;
+    double t_acc_dl = 0.0;
 };
 #endif

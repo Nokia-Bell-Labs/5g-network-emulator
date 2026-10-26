@@ -209,20 +209,20 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "max_distance")
                                 ue_c_list.back().ue_c.mobility_c.max_distance = std::stof(value);
                             if (key == "time_target_var")
-                                ue_c_list.back().ue_c.mobility_c.time_target_var = std::stof(value);
+                                ue_c_list.back().ue_c.mobility_c.time_target_var = std::stod(value);
                             if (key == "time_target")
-                                ue_c_list.back().ue_c.mobility_c.time_target = std::stof(value);
+                                ue_c_list.back().ue_c.mobility_c.time_target = std::stod(value);
                             if (key == "delta_metric")
                                 ue_c_list.back().ue_c.delta_metric = std::stof(value);
                             if (key == "delay_t_metric")
-                                ue_c_list.back().ue_c.delay_t_metric = std::stof(value);
+                                ue_c_list.back().ue_c.delay_t_metric = std::stod(value);
                             if (key == "beta_metric")
                             {
                                 ue_c_list.back().ue_c.beta_metric = std::stof(value);
                                 ue_c_list.back().ue_c.beta_metric_configured = true;
                             }
                             if (key == "pkt_delay_budget")
-                                ue_c_list.back().ue_c.pkt_delay_budget = std::stof(value);
+                                ue_c_list.back().ue_c.pkt_delay_budget = std::stod(value);
                             if (key == "l4s_dual_queue")
                             {
                                 if (value == "true" || value == "1")
@@ -231,17 +231,17 @@ void configuration_loader::load(std::string cfg_file)
                                     ue_c_list.back().ue_c.l4s_c.enabled = false;
                             }
                             if (key == "l4s_target_ms")
-                                ue_c_list.back().ue_c.l4s_c.target_s = std::stof(value) * 0.001f;
+                                ue_c_list.back().ue_c.l4s_c.target_s = std::stod(value) * 0.001;
                             if (key == "l4s_rtt_max_ms")
-                                ue_c_list.back().ue_c.l4s_c.rtt_max_s = std::stof(value) * 0.001f;
+                                ue_c_list.back().ue_c.l4s_c.rtt_max_s = std::stod(value) * 0.001;
                             if (key == "l4s_min_th_us")
-                                ue_c_list.back().ue_c.l4s_c.min_th_s = std::stof(value) * 0.000001f;
+                                ue_c_list.back().ue_c.l4s_c.min_th_s = std::stod(value) * 0.000001;
                             if (key == "l4s_range_us")
-                                ue_c_list.back().ue_c.l4s_c.range_s = std::stof(value) * 0.000001f;
+                                ue_c_list.back().ue_c.l4s_c.range_s = std::stod(value) * 0.000001;
                             if (key == "l4s_k")
                                 ue_c_list.back().ue_c.l4s_c.k = std::stof(value);
                             if (key == "l4s_classic_guard_ms")
-                                ue_c_list.back().ue_c.l4s_c.classic_guard_s = std::stof(value) * 0.001f;
+                                ue_c_list.back().ue_c.l4s_c.classic_guard_s = std::stod(value) * 0.001;
                             // SCENARIO
                             if (key == "ue_height")
                                 ue_c_list.back().ue_c.ue_m.ue_h = std::stof(value);
@@ -339,15 +339,15 @@ void configuration_loader::load(std::string cfg_file)
                             if (mode == "Global")
                             {
                                 if (key == "duration")
-                                    duration = std::stof(value);
+                                    duration = std::stod(value);
                                 if (key == "period")
-                                    period = std::stof(value);
+                                    period = std::stod(value);
                                 if (key == "seed")
                                     seed = (std::uint64_t)std::stoull(value);
                                 if (key == "run_id")
                                     unique_id = value;
                                 if (key == "progress_log_period_s")
-                                    progress_log_period_s = std::stof(value);
+                                    progress_log_period_s = std::stod(value);
                                 if (key == "multithreading")
                                 {
                                     if (value == "true" || value == "1")
@@ -415,9 +415,9 @@ void configuration_loader::load(std::string cfg_file)
                             {
                                 // PDCP CONFIG
                                 if (key == "backhaul_d")
-                                    backhaul_d = std::stof(value);
+                                    backhaul_d = std::stod(value);
                                 if (key == "backhaul_d_var")
-                                    backhaul_d_var = std::stof(value);
+                                    backhaul_d_var = std::stod(value);
                                 if (key == "order_pkts")
                                 {
                                     if (value == "true" || value == "1")
@@ -670,25 +670,25 @@ void configuration_loader::load(std::string cfg_file)
                                 if (key == "ut_noise_figure")
                                     ut_noise_figure = std::stoi(value);
                                 if (key == "air_delay_var_ul")
-                                    air_delay_var_ul = std::stof(value);
+                                    air_delay_var_ul = std::stod(value);
                                 if (key == "rtx_period_ul")
-                                    rtx_period_ul = std::stof(value);
+                                    rtx_period_ul = std::stod(value);
                                 if (key == "rtx_period_var_ul")
-                                    rtx_period_var_ul = std::stof(value);
+                                    rtx_period_var_ul = std::stod(value);
                                 if (key == "rtx_proc_delay_ul")
-                                    rtx_proc_delay_ul = std::stof(value);
+                                    rtx_proc_delay_ul = std::stod(value);
                                 if (key == "rtx_proc_delay_var_ul")
-                                    rtx_proc_delay_var_ul = std::stof(value);
+                                    rtx_proc_delay_var_ul = std::stod(value);
                                 if (key == "air_delay_var_dl")
-                                    air_delay_var_dl = std::stof(value);
+                                    air_delay_var_dl = std::stod(value);
                                 if (key == "rtx_period_dl")
-                                    rtx_period_dl = std::stof(value);
+                                    rtx_period_dl = std::stod(value);
                                 if (key == "rtx_period_var_dl")
-                                    rtx_period_var_dl = std::stof(value);
+                                    rtx_period_var_dl = std::stod(value);
                                 if (key == "rtx_proc_delay_dl")
-                                    rtx_proc_delay_dl = std::stof(value);
+                                    rtx_proc_delay_dl = std::stod(value);
                                 if (key == "rtx_proc_delay_var_dl")
-                                    rtx_proc_delay_var_dl = std::stof(value);
+                                    rtx_proc_delay_var_dl = std::stod(value);
                             }
                             LOG_INFO_I("configuration_loader::load") << " Configuration - " << key << " = " << value << " added." << END();
                         }
@@ -789,8 +789,8 @@ void configuration_loader::load(std::string cfg_file)
     }
 
     const auto require_nonnegative_finite =
-        [](const char *name, float value) {
-            if (!std::isfinite(value) || value < 0.0f)
+        [](const char *name, double value) {
+            if (!std::isfinite(value) || value < 0.0)
                 throw std::invalid_argument(
                     std::string(name)
                     + " must be finite and non-negative seconds");
@@ -816,7 +816,7 @@ void configuration_loader::load(std::string cfg_file)
             "harq_model: legacy_bler requires mcs_tables: true");
 }
 
-float configuration_loader::get_period()
+double configuration_loader::get_period()
 {
     return period;
 }
@@ -826,12 +826,12 @@ std::uint64_t configuration_loader::get_seed()
     return seed;
 }
 
-float configuration_loader::get_duration()
+double configuration_loader::get_duration()
 {
     return duration;
 }
 
-float configuration_loader::get_progress_log_period_s()
+double configuration_loader::get_progress_log_period_s()
 {
     return progress_log_period_s;
 }
