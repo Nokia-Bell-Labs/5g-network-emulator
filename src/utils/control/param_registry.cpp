@@ -242,7 +242,7 @@ std::vector<param_entry> builtin_entries()
         "Delay budget of the PDCP buffers, both directions. A packet older than this is "
         "discarded before reaching the air. Raise it to study bulk transfers, where the "
         "default would evaporate most of an injected object.",
-        [](ue &u, double s, std::string &) { u.set_pkt_delay_budget((float)s); return true; },
+        [](ue &u, double s, std::string &) { u.set_pkt_delay_budget(s); return true; },
         [](ue &u) { return (double)u.get_pkt_delay_budget(); }));
 
     out.push_back(number("mobility.speed_kmh", "km/h", 0.0, UNBOUNDED,

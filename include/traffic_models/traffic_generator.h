@@ -23,7 +23,7 @@ public:
     traffic_generator( int id,
                        std::string _ul_traffic_file,
                        std::string _dl_traffic_file,
-                       int _pkt_size, float _delay=0)
+                       int _pkt_size, double _delay=0)
     {
         ul_traffic_file = _ul_traffic_file; 
         dl_traffic_file = _dl_traffic_file;
@@ -132,7 +132,7 @@ private:
     std::string dl_traffic_file; 
     std::fstream dl_file; 
     std::fstream ul_file; 
-    float delay=0; 
+    double delay=0;
 
 private: 
     float dumb_tp = 0.0; 

@@ -35,7 +35,7 @@ void control_manager::init(const control_config &cfg, std::vector<ue> *ue_list, 
     max_cmds_per_tick_ = cfg.max_cmds_per_tick;
     max_object_events_ = (size_t)std::max(1, cfg.max_object_events);
     cell_ = cell;
-    const float period_ms = cell.period_ms;
+    const double period_ms = cell.period_ms;
 
     if (!cfg.enabled)
     {
@@ -724,7 +724,7 @@ std::string control_manager::read_cell_state() const
     j["period_ms"] = cell_.period_ms;
     j["duration_s"] = cell_.duration_s;
     j["map_file"] = cell_.map_file;
-    j["realtime"] = cell_.period_ms > 0.0f;
+    j["realtime"] = cell_.period_ms > 0.0;
 
     // Read live rather than stored: UEs come and go with the enabled knob.
     j["n_ues"] = (int)(ue_list_ != nullptr ? ue_list_->size() : 0);

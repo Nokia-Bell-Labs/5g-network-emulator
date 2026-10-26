@@ -302,6 +302,10 @@ void test_apply_and_units()
 
     assert(reg.find("pkt_delay_budget_s")->apply(u, param_value(2.0), reason));
     assert(near(reg.find("pkt_delay_budget_s")->read(u), 2.0));
+    // A budget that a float cannot hold must reach the expiry decision as it was set.
+    assert(reg.find("pkt_delay_budget_s")->apply(u, param_value(0.123456789012345), reason));
+    assert(reg.find("pkt_delay_budget_s")->read(u) == 0.123456789012345);
+    assert(u.get_pkt_delay_budget() == 0.123456789012345);
 
     assert(reg.find("enabled")->apply(u, param_value(false), reason));
     assert(!u.is_enabled());

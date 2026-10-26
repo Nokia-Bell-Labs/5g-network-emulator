@@ -163,6 +163,17 @@ void test_float_cannot_resolve_the_case()
 // Packet delay, at the release stage: a block granted at T0 that reaches the end of a
 // 250 us backhaul delay is not released 1 us early, is released on time, and its latency
 // is reported to better than 1 us.
+// The configured traffic delay is subtracted from the simulated time, so it is a double like
+// the time: a float delay moved the boundary of a decision by up to 1e-8 s.
+void test_traffic_delay_is_kept_as_double()
+{
+    const double delay = 0.123456789012345;
+    traffic_config cfg(CONSTANT_TRAFFIC_MODEL, 0.0f, 0.0f, "", "", 0.0f, 1000, 0.0f, 0.0f, delay);
+    assert(cfg.delay == delay);
+    cfg.delay = 0.1;
+    assert(cfg.delay == 0.1);      // not 0.100000001490116, which is what a float holds
+}
+
 void test_packet_delay_is_exact_at_12h()
 {
     const double bh_d = 0.000250;
@@ -429,6 +440,8 @@ int main()
 {
     test_float_cannot_resolve_the_case();
     std::puts("ok   float_cannot_resolve_the_case");
+    test_traffic_delay_is_kept_as_double();
+    std::puts("ok   traffic_delay_is_kept_as_double");
     test_packet_delay_is_exact_at_12h();
     std::puts("ok   packet_delay_is_exact_at_12h");
     test_packet_delay_through_pdcp_layer_at_12h();
