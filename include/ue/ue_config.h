@@ -151,7 +151,7 @@ struct ue_config
     traffic_config traffic_c; 
     mobility_config mobility_c; 
     float delta_metric; 
-    double delay_t_metric; 
+    double delay_t_metric;
     float beta_metric;
     bool beta_metric_configured = false;
     double pkt_delay_budget = 0.35;

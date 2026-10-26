@@ -52,8 +52,8 @@ struct dualpi2_stats
 struct pdcp_config
 {
     pdcp_config(){}
-    pdcp_config(int _max_rtx, double _air_delay_var, 
-                double _rtx_period, double _rtx_period_var, double _rtx_proc_delay, 
+    pdcp_config(int _max_rtx, double _air_delay_var,
+                double _rtx_period, double _rtx_period_var, double _rtx_proc_delay,
                 double _rtx_proc_delay_var, double _bh_d, double _bh_d_var,
                 bool _order_packets,
                 harq_model _harq_model = harq_model::legacy_bler)

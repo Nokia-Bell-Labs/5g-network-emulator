@@ -139,11 +139,11 @@ public:
     float get_consumed_bits(int tx_dir);
     double get_oldest_timestamp(int tx_dir);
     float add_pkts(int tx, std::deque<ip_pkt> &pkts);
-    int get_id() const; 
+    int get_id() const;
     const std::string& get_control_id() const { return control_id; }
     bool has_packets(int tx_dir);
     schedule_candidate get_schedule_candidate(int tx_dir, int f_index, int n_enabled, int ue_index);
-    double get_delay_t(); 
+    double get_delay_t();
     float get_delta(); 
     float handle_pkt(float bits, int tx_dir, int f_index);
     void finalize_ul_allocation(int allocated_prbs);
@@ -268,7 +268,7 @@ protected:
     mobility_model mobility_m; 
     phy_shared phy_s;
     float delta_metric; 
-    double delay_t_metric; 
+    double delay_t_metric;
     float beta_metric; 
 protected:
     bool log_ue; 

@@ -292,8 +292,8 @@ metric_handler::metric_handler(
     }
     throughput_based =
         entry.throughput_based || throughput_recipe.uses_history;
-    delay_t = _delay_t; 
-    delta = _delta; 
+    delay_t = _delay_t;
+    delta = _delta;
 }
 
 float metric_handler::get_metric(const metric_info &metric_i, double current_t, int f)

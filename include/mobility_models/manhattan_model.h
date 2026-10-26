@@ -48,7 +48,7 @@ public:
         }
         if(past_t > 0)
         {
-            const float t_step = static_cast<float>(current_t - past_t);  // small step: narrow after the double subtraction 
+            const float t_step = static_cast<float>(current_t - past_t);  // small step: narrow after the double subtraction
             pos2d next_pos = current_pos + current_dir * ( t_step * speed );
 
             if(  next_pos.get_distance() <= max_distance && abs(next_pos._x()) <= max_apothem && abs(next_pos._y())<=max_apothem)

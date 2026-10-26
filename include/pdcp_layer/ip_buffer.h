@@ -28,9 +28,9 @@ public:
     ip_buffer(int _verbosity = 0);
 private: 
     std::deque<ip_pkt> pkt_list; 
-    double current_t; 
+    double current_t;
     int current_id = 0; 
-    double oldest_t = 0; 
+    double oldest_t = 0;
     int verbosity = 0; 
 
 private: 

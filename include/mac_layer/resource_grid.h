@@ -121,7 +121,7 @@ private:
     std::string log_id; 
     log_handler * logger; 
     int verbosity = 0; 
-    double current_t = 0; 
+    double current_t = 0;
     std::vector<ue> *ue_list = nullptr;
     grid_step_metrics last_step_metrics;
 };

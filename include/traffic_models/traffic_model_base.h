@@ -59,7 +59,7 @@ public:
             double t_diff = t - past_t_ul; 
             past_t_ul = t; 
             float dist = uniform_dist(uniform_gen);
-            return static_cast<float>(ul_target * t_diff * (1 + dist * var_percent)); 
+            return static_cast<float>(ul_target * t_diff * (1 + dist * var_percent));
         }
         past_t_ul = t;
         return 0.0; 
@@ -72,7 +72,7 @@ public:
             double t_diff = t - past_t_dl; 
             past_t_dl = t; 
             float dist = uniform_dist(uniform_gen);
-            return static_cast<float>(dl_target * t_diff * (1 + dist * var_percent)); 
+            return static_cast<float>(dl_target * t_diff * (1 + dist * var_percent));
         }
         past_t_dl = t; 
         return 0.0; 

@@ -27,7 +27,7 @@ class linear_drift_model : public mobility_model_base
 {
 public:
     linear_drift_model(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var, 
-                       float _max_distance, double _time_target, float maxApothem, 
+                       float _max_distance, double _time_target, float maxApothem,
                        double _time_target_var, bool _random_v)
     :mobility_model_base(id, _init_pos, _random_init, _speed, _speed_var, _max_distance, _time_target, maxApothem, _time_target_var, _random_v) {}
 

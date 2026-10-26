@@ -88,9 +88,9 @@ struct ip_pkt
         return size == original_size;
     }
 
-    double current_t; 
-    double ip_t; 
-    double t_out; 
+    double current_t;
+    double ip_t;
+    double t_out;
     std::uint64_t size;
     std::uint64_t original_size;
     uint32_t uid; 
@@ -98,8 +98,8 @@ struct ip_pkt
     bool is_fragment;
     int frags_created = 0;
     int frags_recovered = 0;
-    double backhaul_d; 
-    double backhaul_d_var; 
+    double backhaul_d;
+    double backhaul_d_var;
     bool is_head = true; 
     bool erase = false; 
     uint8_t ecn = ECN_NOT_ECT;
@@ -155,16 +155,16 @@ struct harq_pkt
         t_out = current_t + delay;
     }
     double ip_t = 0.0;
-    double current_t = 0.0; 
+    double current_t = 0.0;
     float distance = 0.0;
     bool dropped = false; 
     int attempt_ordinal = 0;
-    double t_out = 0.0; 
+    double t_out = 0.0;
     int mcs_i = -1; 
     int layers = 1;
     std::uint64_t bits = 0;
-    double backhaul_d = 0.0; 
-    double backhaul_d_var = 0.0; 
+    double backhaul_d = 0.0;
+    double backhaul_d_var = 0.0;
     int id = -1;
     std::deque<ip_pkt> pkts;
 };

@@ -137,8 +137,8 @@ protected:
     int current_id = 0; 
     
 protected: 
-    double bh_d; 
-    double bh_d_var; 
+    double bh_d;
+    double bh_d_var;
 
 public: 
     double current_t = 0;

@@ -86,10 +86,10 @@ protected:
     float current_distance; 
     float max_distance; 
     float max_apothem;
-    double time_target; 
-    double time_target_var; 
-    double t_target; 
-    double past_t; 
+    double time_target;
+    double time_target_var;
+    double t_target;
+    double past_t;
   
 };
 

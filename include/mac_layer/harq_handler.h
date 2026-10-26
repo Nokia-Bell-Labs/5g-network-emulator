@@ -32,8 +32,8 @@
 class harq_handler
 {
 public: 
-    harq_handler(int _max_rtx, double _air_delay, 
-                 double _rtx_period, double _rtx_period_var, 
+    harq_handler(int _max_rtx, double _air_delay,
+                 double _rtx_period, double _rtx_period_var,
                  double _rtx_p_delay, double _rtx_p_delay_var,
                  unsigned int _seed, int _verbosity = 0,
                  harq_model _model = harq_model::legacy_bler,
@@ -41,10 +41,10 @@ public:
 private: 
     int max_rtx; 
     double air_delay_var;
-    double rtx_p_delay; 
+    double rtx_p_delay;
     double rtx_p_delay_var;
-    double rtx_period; 
-    double rtx_period_var; 
+    double rtx_period;
+    double rtx_period_var;
     std::deque<harq_pkt> harq_buffer; 
     double current_t = 0.0;
     int verbosity = 0; 
