@@ -224,6 +224,12 @@ The event carries `uid`, `fate`, `bits`, `delay_s`, `ce`, `tx_dir`, `queue_num` 
 - **Freeze rule.** Register at start-up, typically from a file-scope object. The registry freezes at the first `packet_handler::step` of any handler (or at the first resolved fate of a handler that is used without a step); a registration after that throws `std::logic_error`. A null function throws `std::invalid_argument` and a 17th observer throws `std::length_error`. Observers run in registration order. One that throws is swallowed and counted in `fate_observer_failures()`, and the observers after it still run. There is no way to clear the registry in a running process.
 - **Threads.** Observers run on the phase thread of the UE that owns the handler, one thread per UE, and may run at the same time for different UEs. They must not block, and must keep their state per UE or synchronise it.
 
+## Example
+
+`examples/observability/` is a small module that uses all five. It counts packets, bits, CE marks and delay per UE, direction and DSCP class, publishes the change of those counters as telemetry, scores like proportional fair while counting how often each UE is scored, and adds two runtime parameters that choose what is reported for a UE. It reads and counts; it does not change a decision of the emulator.
+
+It is not part of the default build. `make example-observability` builds `bin/fikore-observability`, and `make test-examples` builds and runs its test. See `examples/observability/README.md` for what each file shows and how to run it.
+
 ## Order within a TTI
 
 Parameters from the control plane are applied first, then the controllers run, then the MAC step schedules using the metric. A weight that a controller computes in TTI `n` from the state at the end of TTI `n-1` is therefore the one the metric reads in TTI `n`.

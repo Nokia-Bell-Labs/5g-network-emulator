@@ -34,6 +34,18 @@ TEST_DEPS := $(TEST_OBJECTS:.o=.d)
 TOOLS_SOURCES := $(shell find tools -name '*.cpp' 2>/dev/null | sort)
 TOOLS_OBJECTS := $(patsubst tools/%.cpp,$(TOOLS_OBJ_DIR)/%.o,$(TOOLS_SOURCES))
 TOOLS_DEPS := $(TOOLS_OBJECTS:.o=.d)
+
+# Optional example of the extension points (examples/observability). It is built only by its own
+# targets: the default binary, the tools and `make test` do not see it. Its object files are linked
+# directly, never through an archive, so that the registrations in them are not dropped.
+EXAMPLE_DIR := examples/observability
+EXAMPLE_TARGET := $(BIN_DIR)/fikore-observability
+EXAMPLE_SOURCES := $(sort $(wildcard $(EXAMPLE_DIR)/*.cpp))
+EXAMPLE_OBJECTS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXAMPLE_SOURCES))
+EXAMPLE_TEST_SOURCES := $(sort $(wildcard $(EXAMPLE_DIR)/tests/*_test.cpp))
+EXAMPLE_TEST_OBJECTS := $(patsubst %.cpp,$(OBJ_DIR)/%.o,$(EXAMPLE_TEST_SOURCES))
+EXAMPLE_TEST_BINS := $(patsubst $(EXAMPLE_DIR)/tests/%_test.cpp,$(BUILD_DIR)/examples/%_test,$(EXAMPLE_TEST_SOURCES))
+EXAMPLE_DEPS := $(EXAMPLE_OBJECTS:.o=.d) $(EXAMPLE_TEST_OBJECTS:.o=.d)
 TRANSPORT_TESTS := \
 	transport/tests/test_backend.py \
 	transport/tests/test_iperf.py \
@@ -42,8 +54,8 @@ TRANSPORT_TESTS := \
 	transport/tests/test_scenario.py \
 	transport/tests/test_transports.py
 
-.PHONY: all tools run test test-api test-transport test-transport-integration test-nfqueue smoke clean print-objects
-.SECONDARY: $(TEST_OBJECTS)
+.PHONY: all tools example-observability test-examples run test test-api test-transport test-transport-integration test-nfqueue smoke clean print-objects
+.SECONDARY: $(TEST_OBJECTS) $(EXAMPLE_TEST_OBJECTS)
 
 all: $(TARGET) $(TOOLS_TARGETS)
 
@@ -79,6 +91,23 @@ $(BIN_DIR)/udp_tos_probe: $(TOOLS_OBJ_DIR)/udp_tos_probe.o
 $(BIN_DIR)/scheduler_family_benchmark: $(TOOLS_OBJ_DIR)/scheduler_family_benchmark.o $(LIB_OBJECTS)
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+example-observability: $(EXAMPLE_TARGET)
+
+$(EXAMPLE_TARGET): $(APP_OBJECTS) $(EXAMPLE_OBJECTS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+$(EXAMPLE_TEST_BINS): $(BUILD_DIR)/examples/%_test: $(OBJ_DIR)/$(EXAMPLE_DIR)/tests/%_test.o $(LIB_OBJECTS) $(EXAMPLE_OBJECTS)
+	@mkdir -p $(@D)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+test-examples: $(EXAMPLE_TEST_BINS)
+	@set -e; \
+	for test_bin in $(EXAMPLE_TEST_BINS); do \
+		echo "[TEST] $$test_bin"; \
+		$$test_bin; \
+	done
 
 test: $(TARGET) $(TEST_BINS)
 	@set -e; \
@@ -128,9 +157,9 @@ smoke: all
 	./$(TARGET) tests/control_smoke.ini
 
 clean:
-	$(RM) -r $(BUILD_DIR) $(TARGET) $(TOOLS_TARGETS)
+	$(RM) -r $(BUILD_DIR) $(TARGET) $(TOOLS_TARGETS) $(EXAMPLE_TARGET)
 
 print-objects:
 	@printf '%s\n' $(APP_OBJECTS)
 
--include $(APP_DEPS) $(TEST_DEPS) $(TOOLS_DEPS)
+-include $(APP_DEPS) $(TEST_DEPS) $(TOOLS_DEPS) $(EXAMPLE_DEPS)
