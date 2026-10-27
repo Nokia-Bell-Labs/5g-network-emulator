@@ -31,9 +31,9 @@ public:
     void exit();
     void init(int _mod_i, int _layers, int _logic_units);
     float release(); 
-    void step(float t);
+    void step(double t);
     bool has_pkts();
-    float get_oldest_timestamp();
+    double get_oldest_timestamp();
     float handle_pkt(
         float bits,
         int mcs,
@@ -49,8 +49,8 @@ public:
     bool using_l4s() const;
     pdcp_queue_status get_queue_status() const;
     dualpi2_stats get_l4s_interval_stats();
-    void set_pkt_delay_budget(float budget_s) { pkt_delay_budget_s = budget_s; }
-    float get_pkt_delay_budget() const { return pkt_delay_budget_s; }
+    void set_pkt_delay_budget(double budget_s) { pkt_delay_budget_s = budget_s; }
+    double get_pkt_delay_budget() const { return pkt_delay_budget_s; }
     // Empties every live buffer through the existing drop paths. Used when a UE is
     // logically detached: for a real UE the drop path is what issues the netfilter
     // verdict, so packets must not be discarded silently or the kernel queue stalls.
@@ -121,9 +121,9 @@ private:
     void cleanup_expired_ip_pkts();
     void cleanup_expired_harq_pkts();
     void drop_harq_pkt(harq_pkt pkt, bit_fate fate);
-    bool is_expired(float ip_t) const;
+    bool is_expired(double ip_t) const;
     bool is_expired(const harq_pkt& pkt) const;
-    float oldest_allowed_ip_t() const;
+    double oldest_allowed_ip_t() const;
     std::uint64_t quantize_grant(float bits);
 
 protected: 
@@ -137,14 +137,14 @@ protected:
     int current_id = 0; 
     
 protected: 
-    float bh_d; 
-    float bh_d_var; 
+    double bh_d;
+    double bh_d_var;
 
 public: 
-    float current_t = 0;
+    double current_t = 0;
 
 protected:
-    float pkt_delay_budget_s = 0.350f;
+    double pkt_delay_budget_s = 0.350;
     std::uint64_t rtx_bits_total_ = 0;
     std::uint64_t last_charged_grant_bits_ = 0;
     double grant_residual_bits_ = 0.0;

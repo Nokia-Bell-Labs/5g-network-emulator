@@ -101,7 +101,7 @@ int grid::get_logical_units() { return n_freq_rb_rbg; }
 
 // Returns the number of resource blocks in the time axis
 int grid::get_n_time_rb() { return n_time_rb; }
-void grid::add_current_ts(float t) { current_t = t; }
+void grid::add_current_ts(double t) { current_t = t; }
 
 // Initializes the resource grid
 void grid::init(std::vector<ue> *ue_list)

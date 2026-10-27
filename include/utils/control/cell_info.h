@@ -26,8 +26,8 @@ struct cell_info
     int numerology = 0;
     int n_freq_rbg = 0;
     int metric_type = -1;
-    float period_ms = -1.0f;
-    float duration_s = 0.0f;
+    double period_ms = -1.0;
+    double duration_s = 0.0;
     // Path of the macroscopic fading map of this scenario, resolved from the binary location by
     // configuration_loader. A client can read it to paint the map behind a trajectory.
     std::string map_file;

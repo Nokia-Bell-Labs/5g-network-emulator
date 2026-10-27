@@ -58,8 +58,8 @@ int main()
     assert(active_ul.model == harq_model::legacy_bler);
     assert(active_ul.max_rtx == 0);
     assert(active_dl.max_rtx == 1);
-    assert(active_ul.rtx_proc_delay == 0.002f);
-    assert(active_ul.rtx_proc_delay_var == 0.007f);
+    assert(active_ul.rtx_proc_delay == 0.002);
+    assert(active_ul.rtx_proc_delay_var == 0.007);
 
     const std::string disabled_path =
         "build/tests/harq_config_disabled.ini";

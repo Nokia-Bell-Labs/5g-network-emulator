@@ -13,6 +13,7 @@
 #include <functional>
 
 #include <simulator/configuration_loader.h>
+#include <simulator/controller_registry.h>
 #include <ue/ue_handler.h>
 #include <mac_layer/mac_layer.h>
 #include <timer/timer.h>
@@ -27,7 +28,7 @@ public:
 
 public: 
 
-    void override_duration(float _duration);
+    void override_duration(double _duration);
 
     void start();
 
@@ -52,6 +53,8 @@ public:
     // For tests: the UE list is final after the constructor returns.
     std::vector<ue>* ue_list() { return ue_h.get_ue_list(); }
     control_manager& control_plane() { return control; }
+    // For tests: number of calls to step() so far.
+    std::uint64_t steps_done() const { return total_steps; }
 
 private: 
 
@@ -65,6 +68,8 @@ private:
     ue_handler ue_h; 
     mac_layer mac_l;
     control_manager control;
+    // Built at the end of the constructor from the controller registry, called from step().
+    std::vector<controller_instance> controllers;
 private: 
     int freq = 1000; 
     int step_c = 0; 
@@ -79,7 +84,7 @@ private:
 private: 
     timer ticker; 
 private: 
-    float duration;
+    double duration;
 private: 
     int verbosity = 0; 
     bool runtime_started = false;
@@ -87,8 +92,8 @@ private:
     run_exit_code exit_code_ = run_exit_code::ok;
     run_stop_reason stop_reason_ = run_stop_reason::none;
     std::chrono::steady_clock::time_point runtime_start_tp;
-    float progress_log_period_s = 0.0f;
-    float next_progress_log_sim_time_s = 0.0f;
+    double progress_log_period_s = 0.0;
+    double next_progress_log_sim_time_s = 0.0;
 
 };
 #endif

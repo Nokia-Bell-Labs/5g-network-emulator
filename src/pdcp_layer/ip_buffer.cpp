@@ -23,7 +23,7 @@ ip_buffer::ip_buffer(int _verbosity)
     verbosity = _verbosity; 
 }
 
-float ip_buffer::get_oldest_timestamp()
+double ip_buffer::get_oldest_timestamp()
 {
     if(backend_has_pkts()) return backend_oldest_timestamp();
     else return current_t; 
@@ -37,9 +37,9 @@ bool ip_buffer::has_pkts()
 void ip_buffer::generate(
     std::uint64_t bits,
     std::uint64_t pkt_size,
-    float t,
-    float bh_d,
-    float bh_d_var)
+    double t,
+    double bh_d,
+    double bh_d_var)
 {
     if (pkt_size == 0)
         throw std::invalid_argument("packet size must be positive");
@@ -94,7 +94,7 @@ bool ip_buffer::add_pkt(ip_pkt pkt)
     return true;
 }
 
-void ip_buffer::step(float _current_t){
+void ip_buffer::step(double _current_t){
     if(verbosity > 0) g_mean.step();
     if(verbosity > 0) e_mean.step();
     generated_pkts_interval = 0;
@@ -276,7 +276,7 @@ const ip_pkt* ip_buffer::backend_peek_oldest() const
     return &pkt_list.front();
 }
 
-float ip_buffer::backend_oldest_timestamp() const
+double ip_buffer::backend_oldest_timestamp() const
 {
     if(l4s_cfg.enabled) return l4s_queue.oldest_timestamp(current_t);
     if(pkt_list.empty()) return current_t;

@@ -36,8 +36,8 @@ class mobility_model_base
 {
 public: 
     mobility_model_base(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var,
-                    float _max_distance, float _time_target, float maxApothem,
-                    float _time_target_var, bool _random_v);
+                    float _max_distance, double _time_target, float maxApothem,
+                    double _time_target_var, bool _random_v);
                     
     mobility_model_base(int it, mobility_config mobility_c,float maxApothem);
     mobility_model_base(){}
@@ -47,7 +47,7 @@ protected:
     std::uniform_real_distribution<float> uniform_dist{-1,1};
 
 public: 
-    virtual void update_pos(float current_t);
+    virtual void update_pos(double current_t);
     void set_random_initial_position(float max_apothem);
     float get_current_d();
     void get_pos(float &x, float &y);
@@ -86,10 +86,10 @@ protected:
     float current_distance; 
     float max_distance; 
     float max_apothem;
-    float time_target; 
-    float time_target_var; 
-    float t_target; 
-    float past_t; 
+    double time_target;
+    double time_target_var;
+    double t_target;
+    double past_t;
   
 };
 

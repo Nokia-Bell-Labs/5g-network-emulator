@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <unistd.h>
 
+#include <mac_layer/metric_handler.h>
 #include <utils/terminal_logging.h>
 #include <utils/monitoring/monitoring_config.h>
 
@@ -181,7 +182,7 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "dl_traffic_file")
                                 ue_c_list.back().ue_c.traffic_c.dl_traffic_file = value;
                             if (key == "delay")
-                                ue_c_list.back().ue_c.traffic_c.delay = std::stof(value);
+                                ue_c_list.back().ue_c.traffic_c.delay = std::stod(value);
                             if (key == "var_perc")
                                 ue_c_list.back().ue_c.traffic_c.var_perc = std::stof(value);
                             if (key == "pkt_size")
@@ -209,20 +210,20 @@ void configuration_loader::load(std::string cfg_file)
                             if (key == "max_distance")
                                 ue_c_list.back().ue_c.mobility_c.max_distance = std::stof(value);
                             if (key == "time_target_var")
-                                ue_c_list.back().ue_c.mobility_c.time_target_var = std::stof(value);
+                                ue_c_list.back().ue_c.mobility_c.time_target_var = std::stod(value);
                             if (key == "time_target")
-                                ue_c_list.back().ue_c.mobility_c.time_target = std::stof(value);
+                                ue_c_list.back().ue_c.mobility_c.time_target = std::stod(value);
                             if (key == "delta_metric")
                                 ue_c_list.back().ue_c.delta_metric = std::stof(value);
                             if (key == "delay_t_metric")
-                                ue_c_list.back().ue_c.delay_t_metric = std::stof(value);
+                                ue_c_list.back().ue_c.delay_t_metric = std::stod(value);
                             if (key == "beta_metric")
                             {
                                 ue_c_list.back().ue_c.beta_metric = std::stof(value);
                                 ue_c_list.back().ue_c.beta_metric_configured = true;
                             }
                             if (key == "pkt_delay_budget")
-                                ue_c_list.back().ue_c.pkt_delay_budget = std::stof(value);
+                                ue_c_list.back().ue_c.pkt_delay_budget = std::stod(value);
                             if (key == "l4s_dual_queue")
                             {
                                 if (value == "true" || value == "1")
@@ -231,17 +232,17 @@ void configuration_loader::load(std::string cfg_file)
                                     ue_c_list.back().ue_c.l4s_c.enabled = false;
                             }
                             if (key == "l4s_target_ms")
-                                ue_c_list.back().ue_c.l4s_c.target_s = std::stof(value) * 0.001f;
+                                ue_c_list.back().ue_c.l4s_c.target_s = std::stod(value) * 0.001;
                             if (key == "l4s_rtt_max_ms")
-                                ue_c_list.back().ue_c.l4s_c.rtt_max_s = std::stof(value) * 0.001f;
+                                ue_c_list.back().ue_c.l4s_c.rtt_max_s = std::stod(value) * 0.001;
                             if (key == "l4s_min_th_us")
-                                ue_c_list.back().ue_c.l4s_c.min_th_s = std::stof(value) * 0.000001f;
+                                ue_c_list.back().ue_c.l4s_c.min_th_s = std::stod(value) * 0.000001;
                             if (key == "l4s_range_us")
-                                ue_c_list.back().ue_c.l4s_c.range_s = std::stof(value) * 0.000001f;
+                                ue_c_list.back().ue_c.l4s_c.range_s = std::stod(value) * 0.000001;
                             if (key == "l4s_k")
                                 ue_c_list.back().ue_c.l4s_c.k = std::stof(value);
                             if (key == "l4s_classic_guard_ms")
-                                ue_c_list.back().ue_c.l4s_c.classic_guard_s = std::stof(value) * 0.001f;
+                                ue_c_list.back().ue_c.l4s_c.classic_guard_s = std::stod(value) * 0.001;
                             // SCENARIO
                             if (key == "ue_height")
                                 ue_c_list.back().ue_c.ue_m.ue_h = std::stof(value);
@@ -339,15 +340,15 @@ void configuration_loader::load(std::string cfg_file)
                             if (mode == "Global")
                             {
                                 if (key == "duration")
-                                    duration = std::stof(value);
+                                    duration = std::stod(value);
                                 if (key == "period")
-                                    period = std::stof(value);
+                                    period = std::stod(value);
                                 if (key == "seed")
                                     seed = (std::uint64_t)std::stoull(value);
                                 if (key == "run_id")
                                     unique_id = value;
                                 if (key == "progress_log_period_s")
-                                    progress_log_period_s = std::stof(value);
+                                    progress_log_period_s = std::stod(value);
                                 if (key == "multithreading")
                                 {
                                     if (value == "true" || value == "1")
@@ -415,9 +416,9 @@ void configuration_loader::load(std::string cfg_file)
                             {
                                 // PDCP CONFIG
                                 if (key == "backhaul_d")
-                                    backhaul_d = std::stof(value);
+                                    backhaul_d = std::stod(value);
                                 if (key == "backhaul_d_var")
-                                    backhaul_d_var = std::stof(value);
+                                    backhaul_d_var = std::stod(value);
                                 if (key == "order_pkts")
                                 {
                                     if (value == "true" || value == "1")
@@ -670,25 +671,25 @@ void configuration_loader::load(std::string cfg_file)
                                 if (key == "ut_noise_figure")
                                     ut_noise_figure = std::stoi(value);
                                 if (key == "air_delay_var_ul")
-                                    air_delay_var_ul = std::stof(value);
+                                    air_delay_var_ul = std::stod(value);
                                 if (key == "rtx_period_ul")
-                                    rtx_period_ul = std::stof(value);
+                                    rtx_period_ul = std::stod(value);
                                 if (key == "rtx_period_var_ul")
-                                    rtx_period_var_ul = std::stof(value);
+                                    rtx_period_var_ul = std::stod(value);
                                 if (key == "rtx_proc_delay_ul")
-                                    rtx_proc_delay_ul = std::stof(value);
+                                    rtx_proc_delay_ul = std::stod(value);
                                 if (key == "rtx_proc_delay_var_ul")
-                                    rtx_proc_delay_var_ul = std::stof(value);
+                                    rtx_proc_delay_var_ul = std::stod(value);
                                 if (key == "air_delay_var_dl")
-                                    air_delay_var_dl = std::stof(value);
+                                    air_delay_var_dl = std::stod(value);
                                 if (key == "rtx_period_dl")
-                                    rtx_period_dl = std::stof(value);
+                                    rtx_period_dl = std::stod(value);
                                 if (key == "rtx_period_var_dl")
-                                    rtx_period_var_dl = std::stof(value);
+                                    rtx_period_var_dl = std::stod(value);
                                 if (key == "rtx_proc_delay_dl")
-                                    rtx_proc_delay_dl = std::stof(value);
+                                    rtx_proc_delay_dl = std::stod(value);
                                 if (key == "rtx_proc_delay_var_dl")
-                                    rtx_proc_delay_var_dl = std::stof(value);
+                                    rtx_proc_delay_var_dl = std::stod(value);
                             }
                             LOG_INFO_I("configuration_loader::load") << " Configuration - " << key << " = " << value << " added." << END();
                         }
@@ -752,16 +753,28 @@ void configuration_loader::load(std::string cfg_file)
                 + std::to_string(dl_queue));
     }
 
-    const bool uses_throughput_history =
-        metric_type == METRIC_PF || metric_type == METRIC_BET;
-    if (metric_type != METRIC_PF && pf_alpha_configured)
+    // The metric is resolved here, whether or not any UE exists, so that an unknown
+    // metric_type is a configuration error and not a problem found at the first UE. What it
+    // may do with the throughput history comes from its registry entry: the built-ins and
+    // registered metrics are treated alike.
+    const metric_entry selected_metric = metric_handler::check_metric(metric_type);
+    throughput_metric_recipe selected_recipe = selected_metric.recipe;
+    if (selected_metric.bind)
+    {
+        metric_params probe;
+        probe.pf_alpha = pf_alpha;
+        selected_recipe = selected_metric.bind(probe).recipe;
+    }
+    const bool uses_throughput_history = selected_recipe.uses_history;
+    if (!selected_metric.bind && pf_alpha_configured)
         throw std::invalid_argument(
-            "pf_alpha is only valid for metric_type: 6 (PF)");
+            "pf_alpha is only valid for a metric that takes it: metric_type: 6 (PF)");
     if (uses_throughput_history)
     {
         if (throughput_time_window_ms <= 0.0f)
             throw std::invalid_argument(
-                "PF and BET require throughput_time_window_ms > 0");
+                "metrics that use the throughput history (PF, BET) require "
+                "throughput_time_window_ms > 0");
         if (metric_type == METRIC_PF && pf_alpha < 0.0f)
             throw std::invalid_argument("PF requires pf_alpha >= 0");
         for (const ue_full_config &ue_c : ue_c_list)
@@ -778,7 +791,7 @@ void configuration_loader::load(std::string cfg_file)
         if (throughput_intra_tti_update)
             throw std::invalid_argument(
                 "throughput_intra_tti_update: allocation_unit is only valid "
-                "for PF and BET");
+                "for a metric that uses the throughput history (PF, BET)");
         for (const ue_full_config &ue_c : ue_c_list)
         {
             if (ue_c.ue_c.beta_metric_configured)
@@ -789,8 +802,8 @@ void configuration_loader::load(std::string cfg_file)
     }
 
     const auto require_nonnegative_finite =
-        [](const char *name, float value) {
-            if (!std::isfinite(value) || value < 0.0f)
+        [](const char *name, double value) {
+            if (!std::isfinite(value) || value < 0.0)
                 throw std::invalid_argument(
                     std::string(name)
                     + " must be finite and non-negative seconds");
@@ -816,7 +829,7 @@ void configuration_loader::load(std::string cfg_file)
             "harq_model: legacy_bler requires mcs_tables: true");
 }
 
-float configuration_loader::get_period()
+double configuration_loader::get_period()
 {
     return period;
 }
@@ -826,12 +839,12 @@ std::uint64_t configuration_loader::get_seed()
     return seed;
 }
 
-float configuration_loader::get_duration()
+double configuration_loader::get_duration()
 {
     return duration;
 }
 
-float configuration_loader::get_progress_log_period_s()
+double configuration_loader::get_progress_log_period_s()
 {
     return progress_log_period_s;
 }

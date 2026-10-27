@@ -14,12 +14,12 @@ struct dualpi2_config
 {
     bool enabled = false;
     float k = 2.0f;
-    float target_s = 0.015f;
-    float rtt_max_s = 0.100f;
-    float min_th_s = 0.0008f;
-    float range_s = 0.0004f;
+    double target_s = 0.015;
+    double rtt_max_s = 0.100;
+    double min_th_s = 0.0008;
+    double range_s = 0.0004;
     float p_lmax = 1.0f;
-    float classic_guard_s = 0.001f;
+    double classic_guard_s = 0.001;
 };
 
 struct dualpi2_stats
@@ -52,9 +52,9 @@ struct dualpi2_stats
 struct pdcp_config
 {
     pdcp_config(){}
-    pdcp_config(int _max_rtx, float _air_delay_var, 
-                float _rtx_period, float _rtx_period_var, float _rtx_proc_delay, 
-                float _rtx_proc_delay_var, float _bh_d, float _bh_d_var,
+    pdcp_config(int _max_rtx, double _air_delay_var,
+                double _rtx_period, double _rtx_period_var, double _rtx_proc_delay,
+                double _rtx_proc_delay_var, double _bh_d, double _bh_d_var,
                 bool _order_packets,
                 harq_model _harq_model = harq_model::legacy_bler)
                 {
@@ -70,13 +70,13 @@ struct pdcp_config
                     model = _harq_model;
                 }
     int max_rtx = 4;
-    float air_delay_var = 0.0f;
-    float rtx_period = 0.004f;
-    float rtx_period_var = 0.0f;
-    float rtx_proc_delay = 0.001f;
-    float rtx_proc_delay_var = 0.0f;
-    float bh_d = 0.005f;
-    float bh_d_var = 0.001f;
+    double air_delay_var = 0.0;
+    double rtx_period = 0.004;
+    double rtx_period_var = 0.0;
+    double rtx_proc_delay = 0.001;
+    double rtx_proc_delay_var = 0.0;
+    double bh_d = 0.005;
+    double bh_d_var = 0.001;
     bool order_packets = true;
     harq_model model = harq_model::legacy_bler;
 };

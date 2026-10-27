@@ -104,7 +104,7 @@ class fake_packet_handler : public packet_handler
 {
 public:
     fake_packet_handler(pdcp_config config, int verbosity) : packet_handler(config, verbosity) {}
-    float ingest(int, float) override { return 0.0f; }
+    double ingest(int, double) override { return 0.0; }
 };
 
 class failing_packet_capture : public pkt_capture

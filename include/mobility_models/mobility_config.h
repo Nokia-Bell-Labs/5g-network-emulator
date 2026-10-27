@@ -35,8 +35,8 @@ struct mobility_config
 {
     mobility_config(){}
     mobility_config(int _type, float _x, float _y, bool _random_init, float _speed, float _speed_var,
-                    float _max_distance, float _time_target, 
-                    float _time_target_var):
+                    float _max_distance, double _time_target,
+                    double _time_target_var):
                     init_pos(_x, _y)
                     {
                         type = _type; 
@@ -56,8 +56,8 @@ struct mobility_config
     float speed_var; 
     float max_speed; 
     float max_distance; 
-    float time_target; 
-    float time_target_var; 
+    double time_target;
+    double time_target_var;
     bool random_v = false; 
     float get_max_speed(){ return speed + speed_var;}
      

@@ -19,7 +19,7 @@ class simulated_packet_handler : public packet_handler
 public:
     simulated_packet_handler(int ue_id, traffic_config traffic_c, pdcp_config pdcp_c, unsigned int seed, int verbosity = 0);
 
-    float ingest(int tx_dir, float current_t) override;
+    double ingest(int tx_dir, double current_t) override;
     void drop(harq_pkt pkt, bit_fate fate) override;
     void drop_ingress_pkt(ip_pkt pkt) override;
     void flush_released() override;
@@ -55,13 +55,15 @@ private:
         std::uint64_t original_size = 0;
         std::uint64_t accounted_bits = 0;
         bool dropped = false;
+        // The fate of the first fragment that failed, which names the packet once it is whole.
+        bit_fate failure_fate = bit_fate::queue_dropped;
         bool congestion_signal = false;
     };
 
     void update_pending_packet(const ip_pkt& pkt, bit_fate fate);
     void packetize(
         std::uint64_t bits,
-        float current_t,
+        double current_t,
         std::uint32_t tag,
         std::uint8_t ecn);
     std::uint64_t quantize_generated_bits(float bits);

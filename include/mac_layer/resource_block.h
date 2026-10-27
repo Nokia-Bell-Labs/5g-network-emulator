@@ -44,7 +44,7 @@ private:
     int n_sc; 
     max_metric_handler max_metric;    
     std::vector<ue> *ue_list; 
-    float current_t;
+    double current_t;
     bool log; 
 
 private: 
@@ -53,7 +53,7 @@ private:
 public: 
     // n_enabled: how many UEs are enabled this TTI. The round robin wraps on it, so it
     // has to be the same number for every RBG and every UE of the step.
-    void estimate_params(int syms, float current_t, int n_enabled);
+    void estimate_params(int syms, double current_t, int n_enabled);
     // Handle Packets
     float handle_packet(int syms);
     bool was_scheduled() const { return last_scheduled; }

@@ -247,7 +247,7 @@ float ue::get_avg_l(int tx_dir)
     return pdcp(tx_dir).get_latency(false);
 }
 
-float ue::get_oldest_timestamp(int tx_dir)
+double ue::get_oldest_timestamp(int tx_dir)
 {
     return pdcp(tx_dir).get_oldest_timestamp();
 }
@@ -385,7 +385,7 @@ void ue::commit_scheduler_tti()
     scheduler_active[TX_UL] = false;
 }
 
-float ue::get_delay_t()
+double ue::get_delay_t()
 {
     return delay_t_metric;
 }
@@ -395,7 +395,7 @@ float ue::get_delta()
     return delta_metric;
 }
 
-int ue::get_id()
+int ue::get_id() const
 {
     return id;
 }

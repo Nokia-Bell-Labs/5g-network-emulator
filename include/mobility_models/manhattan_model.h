@@ -32,11 +32,11 @@ class manhattan_model : public mobility_model_base
 {
 public: 
     manhattan_model(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var,
-                    float _max_distance, float _time_target, float _maxApothem,
-                    float _time_target_var, bool _random_v)
+                    float _max_distance, double _time_target, float _maxApothem,
+                    double _time_target_var, bool _random_v)
     :mobility_model_base(id, _init_pos, _random_init, _speed, _speed_var, _max_distance, _time_target, _maxApothem, _time_target_var, _random_v){}
 public: 
-    void update_pos(float current_t)
+    void update_pos(double current_t)
     {
        
         if(current_t >= t_target)
@@ -48,7 +48,7 @@ public:
         }
         if(past_t > 0)
         {
-            float t_step = current_t - past_t; 
+            const float t_step = static_cast<float>(current_t - past_t);  // small step: narrow after the double subtraction
             pos2d next_pos = current_pos + current_dir * ( t_step * speed );
 
             if(  next_pos.get_distance() <= max_distance && abs(next_pos._x()) <= max_apothem && abs(next_pos._y())<=max_apothem)

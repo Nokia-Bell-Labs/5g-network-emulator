@@ -55,9 +55,12 @@ simulator::simulator(std::string config_file)
     cell.duration_s = duration;
     cell.map_file = scenario_c.map_file;
     control.init(config_loader.get_control_config(), ue_h.get_ue_list(), cell);
+    // Last of the construction: the factories see the final UE list and the cell. An empty
+    // registry, the default, leaves controllers empty and step() has nothing to call.
+    controllers = instantiate_controllers(config_file, cell, *ue_h.get_ue_list());
 }
 
-void simulator::override_duration(float _duration)
+void simulator::override_duration(double _duration)
 {
     duration = _duration;
 }
@@ -231,6 +234,35 @@ void simulator::step(std::uint64_t _ts)
     {
         ticker.request_stop();
         return;
+    }
+
+    // Registered controllers, in registration order. This is deliberately outside
+    // control_manager::tick(), which returns at once when the control plane is disabled: a
+    // controller does not depend on the control socket. Same quiescent point as tick(), both
+    // thread pools are parked, so reading the UE list needs no lock and sees the whole of the
+    // previous TTI; the controllers run before the MAC step of this TTI.
+    if (!controllers.empty())
+    {
+        const tick_context ctx{ts, total_steps - 1, *ue_h.get_ue_list()};
+        for (controller_instance &c : controllers)
+        {
+            try
+            {
+                c.impl->on_tick(ctx);
+            }
+            catch (const run_failure &e)
+            {
+                throw run_failure(e.code(), "controller '" + c.name + "' at tti "
+                                  + std::to_string(ctx.tti) + ": " + e.what());
+            }
+            catch (const std::exception &e)
+            {
+                // Not swallowed: the run must not go on with a half updated controller. The
+                // name is added so that the message says which one it was.
+                throw std::runtime_error("controller '" + c.name + "' at tti "
+                                         + std::to_string(ctx.tti) + ": " + e.what());
+            }
+        }
     }
 
     std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();

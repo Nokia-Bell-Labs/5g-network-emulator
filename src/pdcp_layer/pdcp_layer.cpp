@@ -72,7 +72,7 @@ float pdcp_layer::release()
 	return _packet_h->release();
 }
 
-void pdcp_layer::step(float t)
+void pdcp_layer::step(double t)
 {
     current_t = t;
     _ip_buffer.step(current_t);
@@ -115,7 +115,7 @@ bool pdcp_layer::has_pkts()
     return _ip_buffer.has_pkts() || _harq_buffer.is_pkt_ready();
 }
 
-float pdcp_layer::get_oldest_timestamp()
+double pdcp_layer::get_oldest_timestamp()
 {
     if(_harq_buffer.is_pkt_ready())
     {
@@ -260,7 +260,7 @@ void pdcp_layer::drop_harq_pkt(harq_pkt pkt, bit_fate fate)
     _packet_h->drop(std::move(pkt), fate);
 }
 
-bool pdcp_layer::is_expired(float ip_t) const
+bool pdcp_layer::is_expired(double ip_t) const
 {
     return ip_t < oldest_allowed_ip_t();
 }
@@ -270,7 +270,7 @@ bool pdcp_layer::is_expired(const harq_pkt& pkt) const
     return is_expired(pkt.ip_t);
 }
 
-float pdcp_layer::oldest_allowed_ip_t() const
+double pdcp_layer::oldest_allowed_ip_t() const
 {
     return current_t - pkt_delay_budget_s;
 }
@@ -387,7 +387,7 @@ void pdcp_layer::drop_all()
     }
 
     harq_pkt rtx_pkt;
-    while(_harq_buffer.pop_pkt_older_than(std::numeric_limits<float>::max(), rtx_pkt))
+    while(_harq_buffer.pop_pkt_older_than(std::numeric_limits<double>::max(), rtx_pkt))
     {
         drop_harq_pkt(std::move(rtx_pkt), bit_fate::queue_dropped);
     }
@@ -405,7 +405,7 @@ void pdcp_layer::cleanup_expired_ip_pkts()
 {
     while(_ip_buffer.has_pkts())
     {
-        float oldest_ip_t = _ip_buffer.get_oldest_timestamp();
+        double oldest_ip_t = _ip_buffer.get_oldest_timestamp();
         if(!is_expired(oldest_ip_t)) break;
 
         harq_pkt pkt(current_id, oldest_ip_t, current_t, 0, 0, 0, bh_d, bh_d_var);
@@ -434,7 +434,8 @@ pdcp_queue_status pdcp_layer::get_queue_status() const
     if(oldest_ip != nullptr)
     {
         status.ip_oldest_uid = oldest_ip->uid;
-        status.ip_oldest_age = current_t - oldest_ip->ip_t;
+        status.ip_oldest_age =
+            static_cast<float>(current_t - oldest_ip->ip_t);
     }
 
     status.harq_size = _harq_buffer.size();
@@ -442,7 +443,8 @@ pdcp_queue_status pdcp_layer::get_queue_status() const
     if(oldest_harq != nullptr)
     {
         status.harq_oldest_id = oldest_harq->id;
-        status.harq_oldest_age = current_t - oldest_harq->ip_t;
+        status.harq_oldest_age =
+            static_cast<float>(current_t - oldest_harq->ip_t);
         status.harq_oldest_retry_ordinal =
             oldest_harq->attempt_ordinal;
     }
@@ -463,7 +465,7 @@ pdcp_queue_status pdcp_layer::get_queue_status() const
     status.conservation_residual_bits =
         conservation_residual_bits();
 
-    status.pkt_delay_budget_s = pkt_delay_budget_s;
+    status.pkt_delay_budget_s = static_cast<float>(pkt_delay_budget_s);
     dualpi2_stats l4s_stats = _ip_buffer.get_l4s_stats();
     status.l4s_ce_packets = l4s_stats.ce_packets;
     status.l4s_ce_bits = l4s_stats.ce_bits;

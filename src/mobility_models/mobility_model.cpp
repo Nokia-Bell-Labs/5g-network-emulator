@@ -45,7 +45,7 @@ mobility_model::~mobility_model() = default;
 mobility_model::mobility_model(mobility_model&&) noexcept = default;
 mobility_model& mobility_model::operator=(mobility_model&&) noexcept = default;
 
-void mobility_model::update_pos(float t)
+void mobility_model::update_pos(double t)
 {
     mob_model->update_pos(t);
 }

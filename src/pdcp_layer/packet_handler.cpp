@@ -13,6 +13,7 @@
 
 #include <pdcp_layer/captured_packet_handler.h>
 #include <pdcp_layer/packet_handler.h>
+#include <pdcp_layer/pkt_fate.h>
 #include <pdcp_layer/simulated_packet_handler.h>
 #include <utils/rng_seed.h>
 #include <simulator/configuration_loader.h>
@@ -25,8 +26,8 @@ packet_handler::packet_handler(pdcp_config pdcp_c, unsigned int seed, int _verbo
     bh_d_var = pdcp_c.bh_d_var;
     if (!std::isfinite(bh_d)
         || !std::isfinite(bh_d_var)
-        || bh_d < 0.0f
-        || bh_d_var < 0.0f)
+        || bh_d < 0.0
+        || bh_d_var < 0.0)
         throw std::invalid_argument(
             "backhaul delays must be finite and non-negative seconds");
     verbosity = _verbosity;
@@ -44,8 +45,9 @@ void packet_handler::quit()
 {
 }
 
-void packet_handler::step(float t)
+void packet_handler::step(double t)
 {
+    if(fate_mode_ == fate_mode_unbound) bind_fate_observers();
     tp_mean.step();
     g_mean.step();
     e_mean.step();
@@ -81,7 +83,7 @@ void packet_handler::push(harq_pkt pkt)
         return;
     }
     pkt.t_out += std::max(
-        0.0f,
+        0.0,
         pkt.backhaul_d
             + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
     pkt_list.push_back(std::move(pkt));
@@ -108,8 +110,8 @@ float packet_handler::release()
 {
     int count = 0;
     std::uint64_t bits = 0;
-    float latency = 0;
-    float ip_latency = 0;
+    double latency = 0;
+    double ip_latency = 0;
     for(std::deque<harq_pkt>::iterator it=pkt_list.begin(); it!=pkt_list.end();)
     {
         if(it->t_out <= current_t)
@@ -128,8 +130,8 @@ float packet_handler::release()
     }
     if(count > 0)
     {
-        l_mean.add(latency/count);
-        ipl_mean.add(ip_latency/count);
+        l_mean.add(static_cast<float>(latency / count));
+        ipl_mean.add(static_cast<float>(ip_latency / count));
         l_mean.step();
         ipl_mean.step();
     }
@@ -137,7 +139,7 @@ float packet_handler::release()
     return bits;
 }
 
-void packet_handler::fill_queue_status(pdcp_queue_status& status, float current_t) const
+void packet_handler::fill_queue_status(pdcp_queue_status& status, double current_t) const
 {
     status.release_size = (int)pkt_list.size();
     status.release_high_water =
@@ -146,7 +148,8 @@ void packet_handler::fill_queue_status(pdcp_queue_status& status, float current_
     {
         const harq_pkt &pkt = pkt_list.front();
         status.release_oldest_uid = pkt.id;
-        status.release_oldest_age = current_t - pkt.ip_t;
+        status.release_oldest_age =
+            static_cast<float>(current_t - pkt.ip_t);
     }
     status.final_accept_packets = final_accept_packets_interval;
     status.final_accept_ce_packets = final_accept_ce_packets_interval;
@@ -209,6 +212,34 @@ float packet_handler::get_tp(bool elapsed)
     else return BIT2MBIT*tp_mean.get()*S2MS;
 }
 
+void packet_handler::bind_fate_observers()
+{
+    fate_mode_ = freeze_fate_observers() != 0 ? fate_mode_observed : fate_mode_none;
+}
+
+void packet_handler::report_fate(
+    std::uint32_t uid,
+    bit_fate fate,
+    std::uint64_t bits,
+    double arrival_t,
+    bool ce)
+{
+    if(fate_mode_ == fate_mode_unbound) bind_fate_observers();
+    if(fate_mode_ != fate_mode_observed) return;
+    // The live source stamps arrival with its own clock, which can run a few microseconds ahead
+    // of the TTI time, so the difference is clamped.
+    pkt_fate_event event;
+    event.uid = uid;
+    event.fate = fate;
+    event.bits = bits;
+    event.delay_s = std::max(0.0, current_t - arrival_t);
+    event.ce = ce;
+    event.tx_dir = fate_tx_dir_;
+    event.queue_num = fate_queue_num_;
+    event.ue_id = fate_ue_id_;
+    notify_pkt_fate(event);
+}
+
 void packet_handler::record_error(std::uint64_t bits, bit_fate fate)
 {
     if(verbosity > 0) e_mean.add(bits);
@@ -264,10 +295,12 @@ std::unique_ptr<packet_handler> make_packet_handler(packet_handler_config cfg)
     if(cfg.ue_type == SIM_UE)
     {
         std::unique_ptr<packet_handler> handler(new simulated_packet_handler(cfg.ue_id, cfg.traffic_c, cfg.pdcp_c, seed, cfg.log_traffic));
+        handler->set_fate_identity(cfg.ue_id, cfg.tx_dir, -1);
         return handler;
     }
 
     assert(cfg.queue_num >= 0);
     std::unique_ptr<packet_handler> handler(new captured_packet_handler(cfg.queue_num, cfg.init_t, cfg.pdcp_c, seed, cfg.log_quality));
+    handler->set_fate_identity(cfg.ue_id, cfg.tx_dir, cfg.queue_num);
     return handler;
 }

@@ -23,7 +23,7 @@ struct traffic_config
 {
     traffic_config(){}
     traffic_config(int _type, float _ul_target, float _dl_target, std::string _ul_traffic_file, std::string _dl_traffic_file, float _var_perc,
-                    int _pkt_size, float _bh_d, float _bh_d_var, float _delay = 0)
+                    int _pkt_size, float _bh_d, float _bh_d_var, double _delay = 0)
                     {
                         type = _type; 
                         ul_target = _ul_target; 
@@ -41,6 +41,6 @@ struct traffic_config
     std::string ul_traffic_file;  
     float var_perc; 
     int pkt_size;
-    float delay; 
+    double delay;
     bool random_v=true; 
 };

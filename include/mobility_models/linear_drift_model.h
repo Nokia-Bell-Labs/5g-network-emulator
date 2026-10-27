@@ -27,12 +27,12 @@ class linear_drift_model : public mobility_model_base
 {
 public:
     linear_drift_model(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var, 
-                       float _max_distance, float _time_target, float maxApothem, 
-                       float _time_target_var, bool _random_v)
+                       float _max_distance, double _time_target, float maxApothem,
+                       double _time_target_var, bool _random_v)
     :mobility_model_base(id, _init_pos, _random_init, _speed, _speed_var, _max_distance, _time_target, maxApothem, _time_target_var, _random_v) {}
 
 public:
-    void update_pos(float current_t)
+    void update_pos(double current_t)
     {
         if (current_t >= t_target)
         {
@@ -43,7 +43,7 @@ public:
 
         if (past_t > 0)
         {
-            float t_step = current_t - past_t;
+            const float t_step = static_cast<float>(current_t - past_t);  // small step: narrow after the double subtraction
 
             pos2d direction = current_pos / current_pos.get_distance();
 

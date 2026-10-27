@@ -133,7 +133,7 @@ struct ue_config
     ue_config(){}
     ue_config(ue_model _ue_model, 
               traffic_config _traffic_c, mobility_config _mobility_c, int _priority = 1,
-              float _delta_metric = 1.0, float _delay_t_metric = 0.1, float _beta_metric = 0.5, float _pkt_delay_budget = 0.35)
+              float _delta_metric = 1.0, double _delay_t_metric = 0.1, float _beta_metric = 0.5, double _pkt_delay_budget = 0.35)
             {
                 ue_m = _ue_model; 
                 traffic_c = _traffic_c; 
@@ -151,10 +151,10 @@ struct ue_config
     traffic_config traffic_c; 
     mobility_config mobility_c; 
     float delta_metric; 
-    float delay_t_metric; 
+    double delay_t_metric;
     float beta_metric;
     bool beta_metric_configured = false;
-    float pkt_delay_budget = 0.35f;
+    double pkt_delay_budget = 0.35;
     int log_freq = 0; 
     bool log_ue = false; 
     bool log_mobility = false; 

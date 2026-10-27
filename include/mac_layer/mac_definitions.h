@@ -50,6 +50,12 @@ static const int SCH_SC_SPACING[SCH_MAX_NUMEROLOGY + 1] = {15, 30, 60, 120, 240,
 #define METRIC_MAX_TP 4
 #define METRIC_RR 5
 #define METRIC_PF 6
+// Identifiers 0..6 belong to the built-in metrics. Metrics added through
+// metric_registry are expected to use identifiers from here on; only a clash with a
+// registered identifier is rejected.
+#define METRIC_EXTERNAL_FIRST 1000
+// Default for a configuration that does not set metric_type. It is no longer the
+// fallback for an unknown metric_type, which is rejected.
 #define SCH_METRIC_DEFAULT METRIC_RR
  
 // TDD CONFIGURATION

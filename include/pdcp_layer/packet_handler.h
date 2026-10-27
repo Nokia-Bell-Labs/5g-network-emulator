@@ -83,8 +83,8 @@ public:
 
     virtual void init();
     virtual void quit();
-    virtual void step(float t);
-    virtual float ingest(int tx_dir, float current_t) = 0;
+    virtual void step(double t);
+    virtual double ingest(int tx_dir, double current_t) = 0;
     bool has_ingress_pkts() const;
     ip_pkt pop_ingress_pkt();
     virtual void drop_ingress_pkt(ip_pkt pkt);
@@ -96,7 +96,7 @@ public:
     // fills pkt_list, so for it this is a no-op and the netfilter verdicts are untouched.
     virtual void flush_released();
     virtual float release();
-    virtual void fill_queue_status(pdcp_queue_status& status, float current_t) const;
+    virtual void fill_queue_status(pdcp_queue_status& status, double current_t) const;
     virtual std::uint64_t pending_release_bits() const;
     std::uint64_t pending_ingress_bits() const;
 
@@ -166,8 +166,32 @@ public:
     // Never called with delivered.
     void record_error(std::uint64_t bits, bit_fate fate);
 
+    // Tells the handler which UE and direction it serves, and which capture queue it reads
+    // (-1 for a simulated source). Only the packet fate events carry these three numbers; the
+    // handler does nothing else with them.
+    void set_fate_identity(int ue_id, int tx_dir, int queue_num)
+    {
+        fate_ue_id_ = ue_id;
+        fate_tx_dir_ = tx_dir;
+        fate_queue_num_ = queue_num;
+    }
+
 protected:
     void push_ingress_pkt(ip_pkt pkt);
+    // Reports the final fate of one packet to the registered fate observers (pkt_fate.h). The
+    // handler calls it once per packet uid, where the fate of the whole packet becomes known, and
+    // never for a fragment. arrival_t is ip_pkt::ip_t of the packet. It reads only: no counter,
+    // verdict or queue depends on it. With no observer registered it is one byte load.
+    void resolve_fate(
+        std::uint32_t uid,
+        bit_fate fate,
+        std::uint64_t bits,
+        double arrival_t,
+        bool ce)
+    {
+        if (fate_mode_ != fate_mode_none)
+            report_fate(uid, fate, bits, arrival_t, ce);
+    }
     void record_admitted_bits(std::uint64_t bits);
     virtual bool verdict(
         const ip_pkt& pkt,
@@ -178,9 +202,9 @@ protected:
     std::deque<harq_pkt> pkt_list;
     std::size_t release_high_water_ = 0;
     static constexpr std::size_t max_release_blocks_ = 65536;
-    float current_t = 0;
-    float bh_d = 0;
-    float bh_d_var = 0;
+    double current_t = 0;
+    double bh_d = 0;
+    double bh_d_var = 0;
     int verbosity = 0;
 
     mean_handler<float> tp_mean;
@@ -200,6 +224,25 @@ protected:
 
     std::mt19937 gauss_dist_gen;
     std::uniform_real_distribution<float> gauss_dist{-1,1};
+
+    // Whether any fate observer is registered. It starts unbound, and the first step (or the first
+    // resolved fate, for a handler that is used without one) freezes the registry and settles it.
+    static constexpr std::uint8_t fate_mode_unbound = 0;
+    static constexpr std::uint8_t fate_mode_none = 1;
+    static constexpr std::uint8_t fate_mode_observed = 2;
+
+    void bind_fate_observers();
+    void report_fate(
+        std::uint32_t uid,
+        bit_fate fate,
+        std::uint64_t bits,
+        double arrival_t,
+        bool ce);
+
+    std::uint8_t fate_mode_ = fate_mode_unbound;
+    int fate_ue_id_ = -1;
+    int fate_tx_dir_ = -1;
+    int fate_queue_num_ = -1;
 };
 
 struct packet_handler_config

@@ -631,6 +631,11 @@
       if (p.type === "boolean") {
         input = document.createElement("select");
         input.innerHTML = '<option value="true">true</option><option value="false">false</option>';
+      } else if (p.type === "text") {
+        input = document.createElement("input");
+        input.type = "text";
+        if (p.max_length) input.maxLength = p.max_length;
+        input.style.flex = "1";
       } else {
         input = document.createElement("input");
         input.type = "number";
@@ -681,6 +686,7 @@
 
     var value;
     if (param.type === "boolean") value = input.value === "true";
+    else if (param.type === "text") value = input.value;
     else {
       value = parseFloat(input.value);
       if (isNaN(value)) { logLine(param.name + ": not a number", true); return; }

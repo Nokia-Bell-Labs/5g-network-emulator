@@ -8,6 +8,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -80,6 +82,51 @@ void test_long_goal_is_not_truncated()
     const run_result r = run_timer(5000.0f, 0, 200);
     check_stream(r, 0, 100000);
 }
+
+// An exception thrown by the callback must not reach std::terminate on the ticker thread:
+// the loop ends and wait_finished() rethrows it once, on the waiting thread. Simulated
+// mode (period < 0) runs as fast as it can, so the failure comes at once; the open-ended
+// loop is the one that a live run uses.
+void expect_failure_is_rethrown(double goal_s, double period_ms)
+{
+    int calls = 0;
+    timer t(period_ms, goal_s);
+    t.start([&calls](std::uint64_t)
+    {
+        if (++calls == 5)
+            throw std::runtime_error("callback failed");
+    });
+    bool caught = false;
+    try
+    {
+        t.wait_finished();
+    }
+    catch (const std::runtime_error &e)
+    {
+        caught = std::string(e.what()) == "callback failed";
+    }
+    assert(caught);
+    assert(calls == 5);          // the loop ended at the failure
+    t.wait_finished();           // reported once; a second wait is quiet
+    t.stop();
+}
+
+void test_callback_exception_reaches_the_waiting_thread()
+{
+    expect_failure_is_rethrown(100.0, -1.0);   // finite goal, simulated mode
+    expect_failure_is_rethrown(-1.0, -1.0);    // open ended, simulated mode
+    expect_failure_is_rethrown(100.0, 1.0);    // finite goal, real time
+    expect_failure_is_rethrown(-1.0, 1.0);     // open ended, real time
+}
+
+// stop() and the destructor never throw, even with a failure pending.
+void test_stop_does_not_rethrow()
+{
+    timer t(-1.0, 100.0);
+    t.start([](std::uint64_t) { throw std::runtime_error("boom"); });
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    t.stop();
+}
 } // namespace
 
 int main()
@@ -88,6 +135,8 @@ int main()
     test_finite_duration_crosses_32_bit_wrap();
     test_finite_duration_past_signed_32_bit();
     test_long_goal_is_not_truncated();
+    test_callback_exception_reaches_the_waiting_thread();
+    test_stop_does_not_rethrow();
     std::printf("timer_test: ok\n");
     return 0;
 }

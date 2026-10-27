@@ -32,6 +32,8 @@ void phy_layer::init_metric(int _index)
 {
     // Metric variables
     metric_i.index = _index;
+    metric_i.ue_id = _index;
+    metric_i.tx_dir = tx_dir;
 }
 
 void phy_layer::init_scenario(int _type, float _eNB_h, float _w, float _antenna_h, float _ue_h, float _ue_speed)
@@ -831,7 +833,7 @@ void phy_layer::set_logger(log_handler *_logger)
     logger = _logger;
 }
 
-void phy_layer::prepare_metrics(float oldest_t, float avg_tp)
+void phy_layer::prepare_metrics(double oldest_t, float avg_tp)
 {
     // Get UE info for metrics
     metric_i.req_time = oldest_t;
@@ -974,7 +976,7 @@ void phy_layer::init_update_rates(float _doppler_f, int _cqi_p, int _ri_p)
     }
 }
 
-void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float _macro_fading, int _o2i, int _tx_dir, const pos2d &pos, float oldest_t, float avg_tp, float _current_t, float _sinr_offset_db)
+void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float _macro_fading, int _o2i, int _tx_dir, const pos2d &pos, double oldest_t, float avg_tp, double _current_t, float _sinr_offset_db)
 {
     // doppler_f = freq * _speed / LIGHTSPEED;
 
@@ -982,6 +984,7 @@ void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float 
     last_distance = distance;
     o2i = _o2i;
     tx_dir = _tx_dir;
+    metric_i.tx_dir = _tx_dir;
     macro_fading = _macro_fading;
     sinr_offset_db = _sinr_offset_db;
 

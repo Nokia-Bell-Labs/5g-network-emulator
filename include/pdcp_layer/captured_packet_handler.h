@@ -25,14 +25,14 @@ public:
 
     void init() override;
     void quit() override;
-    float ingest(int tx_dir, float current_t) override;
+    double ingest(int tx_dir, double current_t) override;
     void drop_ingress_pkt(ip_pkt pkt) override;
     void push(harq_pkt pkt) override;
     void drop(harq_pkt pkt, bit_fate fate) override;
     void flush_released() override;
     float release() override;
     std::uint64_t pending_release_bits() const override;
-    void fill_queue_status(pdcp_queue_status& status, float current_t) const override;
+    void fill_queue_status(pdcp_queue_status& status, double current_t) const override;
 
 private:
     struct completion_state
@@ -50,15 +50,15 @@ private:
         bool failed = false;
         bit_fate failure_fate = bit_fate::queue_dropped;
         bool ce_marked = false;
-        float ready_time = 0.0f;
+        double ready_time = 0.0;
     };
 
-    float get_current_ts() const;
+    double get_current_ts() const;
     completion_state &state_for(const ip_pkt &pkt);
     void account_fragment(
         const ip_pkt &pkt,
         bit_fate fate,
-        float ready_time);
+        double ready_time);
     bool state_is_complete(const completion_state &state) const;
     bool state_is_ready(const completion_state &state) const;
     final_packet_verdict state_verdict(
