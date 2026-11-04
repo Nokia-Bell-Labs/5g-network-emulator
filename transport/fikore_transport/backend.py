@@ -295,7 +295,8 @@ class TransportBackend:
     # -- events -------------------------------------------------------------------
 
     def _request_events(self, now_s: float) -> Iterable[NetworkEvent]:
-        for key in list(self._active_requests):
+        # Sorted, because the order of a set of strings changes with the hash seed
+        for key in sorted(self._active_requests):
             request = self.requests[key]
             delivered = min(
                 max(request.flow.receiver.rcv_nxt - request.stream_start, 0),

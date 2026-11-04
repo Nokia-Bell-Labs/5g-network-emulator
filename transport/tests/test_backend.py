@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-Clear
 """The request and delivery interface, checked against the loopback link."""
 import os
+import subprocess
 import sys
 
 from fikore_transport.backend import (BackendConfig, DownloadCancelled,
@@ -136,6 +137,32 @@ def test_partial_final_window_uses_its_actual_telemetry_duration():
     partial = backend._telemetry_for(0, state, 0.015)
     assert abs(first.throughput_mbps - 0.8) < 1e-9
     assert abs(partial.throughput_mbps - 0.8) < 1e-9
+
+
+EVENT_ORDER_SCRIPT = """
+from fikore_transport.backend import BackendConfig, DownloadProgress, TransportBackend
+from fikore_transport.link import LoopbackConfig, LoopbackLink
+
+link = LoopbackLink(LoopbackConfig(rate_bps=20e6, owd_ttis=10, mss=1500,
+                                   queue_bytes=128 * 1024))
+backend = TransportBackend(link, BackendConfig(mss=1500))
+for index in range(8):
+    backend.submit_request(0, f"seg-{index}", 64 * 1024)
+for _ in range(100):
+    for event in backend.advance().events:
+        if isinstance(event, DownloadProgress):
+            print(event.request_id, event.bytes_delivered)
+"""
+
+
+def test_event_order_does_not_depend_on_the_hash_seed():
+    outputs = {
+        subprocess.run([sys.executable, "-c", EVENT_ORDER_SCRIPT], check=True,
+                       capture_output=True, text=True,
+                       env={**os.environ, "PYTHONHASHSEED": str(seed)}).stdout
+        for seed in range(1, 5)
+    }
+    assert len(outputs) == 1
 
 
 def test_close_is_idempotent_and_control_is_accepted():
