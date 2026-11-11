@@ -1,9 +1,9 @@
 # NetworkBackend and SFV Integration — As Built
 
 **Status:** implemented and exercised with SFV-VQEG v0.7.2
-**Code:** `fikore_transport/backend.py`,
+**Code:** `fikore_transport/backend.py`, `fikore_transport/telemetry.py`,
 `transport/benchmarks/validate_sfv.py`
-**Tests:** `test_backend.py`, `test_fikore_link.py`
+**Tests:** `test_backend.py`, `test_telemetry.py`, `test_fikore_link.py`
 
 ## Boundary
 
@@ -69,6 +69,25 @@ after the final step is an error.
 
 Every UE shares this Runner clock. Requests submitted before a window therefore
 compete concurrently rather than running as serial per-UE experiments.
+
+## Network telemetry
+
+`NetworkStep` carries bytes only. Network telemetry is sampled beside it by a
+`NetworkTelemetrySampler` (`backend.telemetry_sampler(ue_ids, interval_s=1.0)`),
+polled after each `advance()`. Samples fall on multiples of the interval, and
+`poll(force=True)` on the final step closes a shorter last interval. Each sample
+carries throughput, drop rate, CE rate, queue bytes and, where the link knows
+them, IP or PDCP latency and SINR. RTT and retransmitted bytes are transport
+measurements from `transport_stats()`; they travel with the network fields for
+now.
+
+With `FikoreLink` the counters come from the last `ue_state` block, which is
+refreshed every `state_every_ttis` slots (10 by default), so a 1 s sampler sees
+state at most 10 ms old.
+
+`BackendConfig.telemetry_every_windows` is the deprecated in-step path: it adds
+`NetworkTelemetryReceived` to `NetworkStep` every N windows and warns on
+construction. The validation runs with it set to `None`.
 
 ## UE mapping and controls
 

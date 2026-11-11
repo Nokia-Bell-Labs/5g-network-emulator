@@ -111,7 +111,8 @@ def test_ideal_beats_tcp_by_wasting_the_radio():
     for transport in ("tcp", "ideal"):
         lk = link()
         backend = TransportBackend(lk, BackendConfig(
-            mss=MSS, transport=transport, retain_request_history=True))
+            mss=MSS, transport=transport, retain_request_history=True,
+            telemetry_every_windows=None))
         backend.submit_request(0, "seg", 300 * 1024)
         finished = None
         for _ in range(400):

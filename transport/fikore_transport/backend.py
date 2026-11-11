@@ -16,6 +16,7 @@ needs.
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Iterable, TypeAlias
 
@@ -24,6 +25,9 @@ from .ideal import IdealReceiver, IdealSender, SharedWindow
 from .link import Direction, Ecn, Link
 from .runner import Flow, Runner
 from .tcp import TcpReceiver, TcpSender
+from .telemetry import (LinkCounters, NetworkTelemetry, NetworkTelemetryReceived,
+                        NetworkTelemetrySampler, TransportStats,
+                        counters_from_fikore_state, telemetry_from_counters)
 
 
 @dataclass(frozen=True)
@@ -49,26 +53,8 @@ class DownloadCancelled:
     time_s: float
 
 
-@dataclass(frozen=True)
-class NetworkTelemetry:
-    throughput_mbps: float | None = None
-    rtt_ms: float | None = None
-    ip_latency_ms: float | None = None
-    pdcp_latency_ms: float | None = None
-    ce_rate: float | None = None
-    drop_rate: float | None = None
-    retransmitted_bytes: int | None = None
-    sinr_db: float | None = None
-    queue_bytes: int | None = None
-
-
-@dataclass(frozen=True)
-class NetworkTelemetryReceived:
-    ue_id: int
-    time_s: float
-    fields: NetworkTelemetry
-
-
+# `NetworkTelemetryReceived` stays in the union only for the deprecated in-step
+# telemetry; new callers read it from `NetworkTelemetrySampler` instead.
 NetworkEvent: TypeAlias = (DownloadProgress | DownloadCompleted | DownloadCancelled
                            | NetworkTelemetryReceived)
 
@@ -116,7 +102,9 @@ class BackendConfig:
     ecn: Ecn = "not-ect"
     rwnd: int = 256 * 1024
     ack_over_link: bool = False
-    telemetry_every_windows: int = 1
+    # Deprecated: emits NetworkTelemetryReceived inside NetworkStep every N windows.
+    # Set to None and sample with NetworkTelemetrySampler instead.
+    telemetry_every_windows: int | None = 1
     # Persistent mode models an HTTP/1.1-style pool per UE: an idle connection is
     # reused and a concurrent request opens another one. Fresh mode preserves the
     # old one-connection-per-object baseline. Ideal transport is always per object.
@@ -138,6 +126,15 @@ class TransportBackend:
 
     def __init__(self, link: Link, cfg: BackendConfig | None = None) -> None:
         self.cfg = cfg or BackendConfig()
+        every = self.cfg.telemetry_every_windows
+        if every is not None:
+            if every < 1:
+                raise ValueError(
+                    f"telemetry_every_windows must be None or at least 1: {every}")
+            warnings.warn(
+                "telemetry inside NetworkStep is deprecated: set "
+                "telemetry_every_windows=None and use NetworkTelemetrySampler",
+                DeprecationWarning, stacklevel=2)
         self.link = link
         self.cfg.mss = getattr(link, "mss", self.cfg.mss)
         self.runner = Runner(link, retain_arrivals=self.cfg.retain_arrivals)
@@ -154,7 +151,7 @@ class TransportBackend:
         self._initial = True
         self._final_emitted = False
         self._closed = False
-        self._telemetry_baseline: dict[int, dict] = {}
+        self._telemetry_baseline: dict[int, LinkCounters] = {}
         self._telemetry_tti_baseline: dict[int, int] = {}
         self._windows_by_ue: dict[int, SharedWindow] = {}
 
@@ -256,7 +253,8 @@ class TransportBackend:
         now_s = self.runner.clock.s
         events: list[NetworkEvent] = list(self._request_events(now_s))
         self._cleanup_retiring_flows()
-        if self._windows % self.cfg.telemetry_every_windows == 0:
+        every = self.cfg.telemetry_every_windows
+        if every is not None and self._windows % every == 0:
             events.extend(self._telemetry_events(now_s))
 
         is_final = horizon is not None and self.runner.clock.tti >= horizon
@@ -353,14 +351,11 @@ class TransportBackend:
             self._connections.pop(flow_id, None)
             del self._retiring_flows[flow_id]
 
-    def _telemetry_events(self, now_s: float) -> Iterable[NetworkEvent]:
-        state = getattr(self.link, "last_state", None)
-        for ue_id in sorted(self._known_ues):
-            yield NetworkTelemetryReceived(ue_id, now_s,
-                                           self._telemetry_for(ue_id, state, now_s))
+    # -- transport measurements ---------------------------------------------------
 
-    def _telemetry_for(self, ue_id: int, state: dict | None,
-                       now_s: float) -> NetworkTelemetry:
+    def transport_stats(self, ue_id: int) -> TransportStats:
+        """What the transport itself measures for a UE: the mean smoothed RTT of
+        its open connections and the bytes it has retransmitted so far."""
         connections = [connection for connection in self._connections.values()
                        if connection.ue_id == ue_id]
         srtts = [connection.flow.sender.srtt_us for connection in connections
@@ -369,31 +364,37 @@ class TransportBackend:
         retransmitted = self._retired_retransmitted.get(ue_id, 0) + sum(
             connection.flow.sender.stats.retransmits * self.cfg.mss
             for connection in connections)
-        if state is None:
-            return NetworkTelemetry(rtt_ms=rtt_ms, retransmitted_bytes=retransmitted)
+        return TransportStats(rtt_ms=rtt_ms, retransmitted_bytes=retransmitted)
 
-        now = state.get((ue_id, self.cfg.direction), {})
-        base = self._telemetry_baseline.get(ue_id, {})
-        self._telemetry_baseline[ue_id] = dict(now)
+    def telemetry_sampler(self, ue_ids: Iterable[int], *,
+                          interval_s: float = 1.0) -> NetworkTelemetrySampler:
+        """A sampler over this backend's link and clock, with its transport stats."""
+        return NetworkTelemetrySampler(
+            self.link, self.runner.clock, ue_ids=ue_ids, mss=self.cfg.mss,
+            interval_s=interval_s, direction=self.cfg.direction,
+            transport_stats=self.transport_stats)
+
+    # -- deprecated in-step telemetry ----------------------------------------------
+
+    def _telemetry_events(self, now_s: float) -> Iterable[NetworkEvent]:
+        state = getattr(self.link, "last_state", None)
+        for ue_id in sorted(self._known_ues):
+            yield NetworkTelemetryReceived(ue_id, now_s,
+                                           self._telemetry_for(ue_id, state, now_s))
+
+    def _telemetry_for(self, ue_id: int, state: dict | None,
+                       now_s: float) -> NetworkTelemetry:
+        """Deprecated: kept only for `telemetry_every_windows`."""
+        stats = self.transport_stats(ue_id)
+        if state is None:
+            return NetworkTelemetry(rtt_ms=stats.rtt_ms,
+                                    retransmitted_bytes=stats.retransmitted_bytes)
+
+        now = counters_from_fikore_state(state.get((ue_id, self.cfg.direction), {}))
+        base = self._telemetry_baseline.get(ue_id)
+        self._telemetry_baseline[ue_id] = now
         previous_tti = self._telemetry_tti_baseline.get(ue_id, 0)
         elapsed_ttis = max(self.runner.clock.tti - previous_tti, 1)
         self._telemetry_tti_baseline[ue_id] = self.runner.clock.tti
-        window_s = elapsed_ttis / 1000.0
-
-        def delta(key: str) -> float:
-            return max(float(now.get(key, 0.0)) - float(base.get(key, 0.0)), 0.0)
-
-        delivered = delta("delivered_bytes_total")
-        lost = delta("dropped_bytes_total") + delta("expired_bytes_total")
-        received_pkts = delivered / self.cfg.mss if self.cfg.mss else 0.0
-        return NetworkTelemetry(
-            throughput_mbps=delivered * 8 / window_s / 1e6,
-            rtt_ms=rtt_ms,
-            pdcp_latency_ms=float(now.get("latency_s", 0.0)) * 1000.0 or None,
-            ce_rate=(delta("ce_packets_total") / received_pkts
-                     if received_pkts else None),
-            drop_rate=(lost / (delivered + lost) if delivered + lost else 0.0),
-            retransmitted_bytes=retransmitted,
-            sinr_db=now.get("sinr_db"),
-            queue_bytes=int(now.get("pending_bytes", 0)),
-        )
+        return telemetry_from_counters(now, base, elapsed_s=elapsed_ttis / 1000.0,
+                                       mss=self.cfg.mss, stats=stats)

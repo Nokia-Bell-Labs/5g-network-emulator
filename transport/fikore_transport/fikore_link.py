@@ -39,6 +39,7 @@ from dataclasses import dataclass
 
 from .emulator import PROTO, Emulator
 from .link import Arrival, Cause, Direction, Transmit
+from .telemetry import LinkCounters, counters_from_fikore_state
 
 # The counters are carried as bits divided by eight, so a whole segment can come
 # back a hair under its own size. The emulator's BIT_ROUND_MARGIN is 0.99 bits,
@@ -169,6 +170,13 @@ class FikoreLink:
     def request_state_next_step(self) -> None:
         self._force_state = True
 
+    def network_counters(self, direction: Direction = "dl") -> dict[int, LinkCounters]:
+        """Cumulative counters from the last state block, at most `state_every_ttis`
+        old."""
+        return {ue: counters_from_fikore_state(state)
+                for (ue, state_direction), state in self.last_state.items()
+                if state_direction == direction}
+
     def submit(self, items: list[Transmit], at_tti: int) -> None:
         if not items:
             return
@@ -258,7 +266,7 @@ class FikoreLink:
 
         if self.use_events:
             events = {"op": "events", "after": self._event_cursor}
-            # Backend telemetry is emitted after a window, so sample on its last slot
+            # Telemetry is read after a window, so sample on its last slot
             # rather than its first; otherwise every observation is one window stale.
             if (self._force_state or
                     (self.state_every_ttis > 0

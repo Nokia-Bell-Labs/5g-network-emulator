@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 
 from fikore_transport.backend import (BackendConfig, DownloadCompleted,
-                                      NetworkTelemetryReceived, TransportBackend)
+                                      TransportBackend)
 from fikore_transport.cc import Cubic
 from fikore_transport.cc_prague import Prague, PragueUnavailable
 from fikore_transport.emulator import Emulator, EmulatorConfig
@@ -53,7 +53,7 @@ def make_backend(work: Path, duration_s: float, n_ues: int,
         cc_factory=cc_factory,
         ecn=ecn,
         retain_request_history=True,
-        telemetry_every_windows=100,
+        telemetry_every_windows=None,
     ))
     return link, backend
 
@@ -107,6 +107,7 @@ def run_objects(duration_s: float, output: Path) -> dict:
             started[(ue, name)] = 0.0
             backend.submit_request(ue, name, segment_bytes)
 
+        sampler = backend.telemetry_sampler(range(n_ues), interval_s=1.0)
         wall0 = time.perf_counter()
         while True:
             step = backend.advance()
@@ -119,9 +120,9 @@ def run_objects(duration_s: float, output: Path) -> dict:
                         name = f"seg-{counters[event.ue_id]}"
                         started[(event.ue_id, name)] = event.time_s
                         backend.submit_request(event.ue_id, name, segment_bytes)
-                elif (isinstance(event, NetworkTelemetryReceived)
-                      and event.fields.rtt_ms is not None):
-                    rtts[event.ue_id].append(event.fields.rtt_ms)
+            for sample in sampler.poll():
+                if sample.fields.rtt_ms is not None:
+                    rtts[sample.ue_id].append(sample.fields.rtt_ms)
             backend.runner.arrivals.clear()
             if step.is_final:
                 break

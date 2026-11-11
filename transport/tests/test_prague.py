@@ -93,7 +93,7 @@ def test_prague_drives_the_backend_unchanged():
                                        queue_bytes=512 * 1024, ce_threshold_ttis=2))
     backend = TransportBackend(link, BackendConfig(
         mss=MSS, cc_factory=Prague, ecn="ect1",
-        retain_request_history=True))
+        retain_request_history=True, telemetry_every_windows=None))
     backend.submit_request(0, "seg-1", 512 * 1024)
     completed = None
     for _ in range(600):

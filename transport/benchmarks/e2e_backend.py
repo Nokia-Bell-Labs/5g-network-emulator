@@ -6,14 +6,14 @@
 
 Two UEs each fetch a queue of video-segment-sized objects, one after another, the
 way a player does. What is printed is what the harness would see: completions,
-their duration, and the telemetry of the window they finished in.
+their duration, and the network telemetry sampled every half second.
 """
 import os
 import time
 from pathlib import Path
 
 from fikore_transport.backend import (BackendConfig, DownloadCompleted,
-                                      NetworkTelemetryReceived, TransportBackend)
+                                      TransportBackend)
 from fikore_transport.cc import Cubic
 from fikore_transport.emulator import Emulator, EmulatorConfig
 from fikore_transport.fikore_link import FikoreLink
@@ -37,7 +37,8 @@ def main(duration_s=6.0, delay_budget_s=0.1):
     link = FikoreLink(Emulator(cfg), flow_to_ue={})
     backend = TransportBackend(link, BackendConfig(
         window_ttis=10, horizon_ttis=int(duration_s * 1000) - 20,
-        rwnd=256 * 1024, cc_factory=Cubic, telemetry_every_windows=50))
+        rwnd=256 * 1024, cc_factory=Cubic, telemetry_every_windows=None))
+    sampler = backend.telemetry_sampler(range(N_UES), interval_s=0.5)
 
     started = {}
     counters = {ue: 0 for ue in range(N_UES)}
@@ -61,12 +62,12 @@ def main(duration_s=6.0, delay_budget_s=0.1):
                 nxt = f"seg-{counters[event.ue_id]}"
                 started[(event.ue_id, nxt)] = event.time_s
                 backend.submit_request(event.ue_id, nxt, SEGMENT_BYTES)
-            elif isinstance(event, NetworkTelemetryReceived):
-                f = event.fields
-                print(f"  t={event.time_s:5.2f}s ue={event.ue_id} telemetry: "
-                      f"{f.throughput_mbps:5.1f} Mbps rtt={f.rtt_ms or 0:5.1f} ms "
-                      f"drop={f.drop_rate or 0:.3f} queue={(f.queue_bytes or 0)//1024:4d} KB "
-                      f"sinr={f.sinr_db or 0:5.1f} dB rtx={f.retransmitted_bytes//1024} KB")
+        for sample in sampler.poll(force=step.is_final):
+            f = sample.fields
+            print(f"  t={sample.time_s:5.2f}s ue={sample.ue_id} telemetry: "
+                  f"{f.throughput_mbps:5.1f} Mbps rtt={f.rtt_ms or 0:5.1f} ms "
+                  f"drop={f.drop_rate or 0:.3f} queue={(f.queue_bytes or 0)//1024:4d} KB "
+                  f"sinr={f.sinr_db or 0:5.1f} dB rtx={f.retransmitted_bytes//1024} KB")
         if step.is_final:
             break
 

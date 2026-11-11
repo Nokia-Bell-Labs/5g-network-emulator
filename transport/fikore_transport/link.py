@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from .telemetry import LinkCounters
+
 Direction = Literal["dl", "ul"]
 Ecn = Literal["not-ect", "ect0", "ect1"]
 Fate = Literal["delivered", "dropped", "expired"]
@@ -94,9 +96,19 @@ class LoopbackLink:
         self._pending: dict[int, list[Transmit]] = {}
         self._queue: dict[Direction, list[tuple[int, Transmit]]] = {"dl": [], "ul": []}
         self._queued_bytes: dict[Direction, int] = {"dl": 0, "ul": 0}
-        self._in_flight: list[Arrival] = []
+        # Each segment in flight carries its direction and, once served, the slots
+        # it spent between entering the queue and arriving.
+        self._in_flight: list[tuple[Arrival, Direction, int | None]] = []
         self._credit: dict[Direction, float] = {"dl": 0.0, "ul": 0.0}
         self.dropped = 0
+        self._flow_to_ue: dict[int, int] = {}
+        self._counters: dict[tuple[int, Direction], dict[str, float]] = {}
+
+    def register_flow(self, flow: int, ue: int) -> None:
+        self._flow_to_ue[flow] = ue
+
+    def unregister_flow(self, flow: int) -> None:
+        self._flow_to_ue.pop(flow, None)
 
     def submit(self, items: list[Transmit], at_tti: int) -> None:
         if items:
@@ -109,23 +121,64 @@ class LoopbackLink:
             for t in self._pending.pop(tti, []):
                 self._enqueue(tti, t)
             self._serve(tti)
-            due_now = [a for a in self._in_flight if a.tti <= tti]
+            due_now = [item for item in self._in_flight if item[0].tti <= tti]
             if due_now:
-                self._in_flight = [a for a in self._in_flight if a.tti > tti]
-                out.extend(due_now)
+                self._in_flight = [item for item in self._in_flight
+                                   if item[0].tti > tti]
+                for arrival, direction, latency_ttis in due_now:
+                    self._account(arrival, direction, latency_ttis)
+                    out.append(arrival)
             self._now += 1
         return out
 
     def close(self) -> None:
         pass
 
+    def network_counters(self, direction: Direction = "dl") -> dict[int, LinkCounters]:
+        """Cumulative per-UE counters of flows registered with `register_flow`.
+
+        `ip_latency_ms` is the queue wait plus propagation of the last segment
+        delivered; segments of unregistered flows are not counted.
+        """
+        queued: dict[int, int] = {}
+        for _, t in self._queue[direction]:
+            ue = self._flow_to_ue.get(t.flow)
+            if ue is not None:
+                queued[ue] = queued.get(ue, 0) + t.size
+        ues = {ue for ue, d in self._counters if d == direction} | set(queued)
+        out = {}
+        for ue in sorted(ues):
+            c = self._counters.get((ue, direction), {})
+            out[ue] = LinkCounters(
+                delivered_bytes=c.get("delivered", 0.0),
+                lost_bytes=c.get("lost", 0.0),
+                ce_packets=c.get("ce", 0.0),
+                queue_bytes=queued.get(ue, 0),
+                ip_latency_ms=c.get("ip_latency_ms"),
+            )
+        return out
+
+    def _account(self, a: Arrival, direction: Direction,
+                 latency_ttis: int | None) -> None:
+        ue = self._flow_to_ue.get(a.flow)
+        if ue is None:
+            return
+        c = self._counters.setdefault((ue, direction), {})
+        if a.fate == "delivered":
+            c["delivered"] = c.get("delivered", 0.0) + a.delivered_bytes
+            c["ce"] = c.get("ce", 0.0) + (1 if a.ce else 0)
+            if latency_ttis is not None:
+                c["ip_latency_ms"] = float(latency_ttis)
+        else:
+            c["lost"] = c.get("lost", 0.0) + a.size
+
     def _enqueue(self, tti: int, t: Transmit) -> None:
         q = self._queue[t.direction]
         if self._queued_bytes[t.direction] + t.size > self.cfg.queue_bytes:
             self.dropped += 1
-            self._in_flight.append(Arrival(tti, t.flow, t.seq, t.size, "dropped",
-                                           ts_us=t.ts_us, kind=t.kind,
-                                           cause="queue"))
+            self._in_flight.append((Arrival(tti, t.flow, t.seq, t.size, "dropped",
+                                            ts_us=t.ts_us, kind=t.kind,
+                                            cause="queue"), t.direction, None))
             return
         q.append((tti, t))
         self._queued_bytes[t.direction] += t.size
@@ -141,14 +194,16 @@ class LoopbackLink:
                 waited = tti - enqueued_at
                 budget = self.cfg.delay_budget_ttis
                 if budget is not None and waited > budget:
-                    self._in_flight.append(Arrival(tti, t.flow, t.seq, t.size, "expired",
-                                                   ts_us=t.ts_us, kind=t.kind,
-                                                   cause="budget"))
+                    self._in_flight.append((Arrival(tti, t.flow, t.seq, t.size,
+                                                    "expired", ts_us=t.ts_us,
+                                                    kind=t.kind, cause="budget"),
+                                            direction, None))
                     continue
                 ce = (self.cfg.ce_threshold_ttis is not None
                       and t.ecn == "ect1"
                       and waited > self.cfg.ce_threshold_ttis)
-                self._in_flight.append(Arrival(tti + self.cfg.owd_ttis, t.flow, t.seq,
-                                               t.size, "delivered", ce=ce,
-                                               delivered_bytes=t.size, ts_us=t.ts_us,
-                                               kind=t.kind))
+                self._in_flight.append((Arrival(tti + self.cfg.owd_ttis, t.flow, t.seq,
+                                                t.size, "delivered", ce=ce,
+                                                delivered_bytes=t.size, ts_us=t.ts_us,
+                                                kind=t.kind),
+                                        direction, waited + self.cfg.owd_ttis))

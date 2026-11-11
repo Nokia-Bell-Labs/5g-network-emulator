@@ -61,6 +61,7 @@ def run_backend(link, requests, max_windows, **kw):
     kw.setdefault("rwnd", 256 * 1024)
     kw.setdefault("retain_request_history", True)
     kw.setdefault("retain_arrivals", True)
+    kw.setdefault("telemetry_every_windows", None)
     cc_factory = kw.pop("cc_factory", Cubic)
     backend = TransportBackend(link, BackendConfig(window_ttis=10, cc_factory=cc_factory,
                                                    **kw))
@@ -167,7 +168,8 @@ def test_two_objects_reuse_one_real_fikore_flow_and_conserve_bytes():
     link = build_link(duration_s=8.0)
     backend = TransportBackend(link, BackendConfig(
         window_ttis=10, rwnd=256 * 1024, cc_factory=Cubic,
-        retain_request_history=True, retain_arrivals=True))
+        retain_request_history=True, retain_arrivals=True,
+        telemetry_every_windows=None))
     try:
         backend.submit_request(0, "first", first_size)
         first_done = False
@@ -274,7 +276,8 @@ def test_two_ues_share_the_cell_and_both_make_progress():
         backend = TransportBackend(link, BackendConfig(window_ttis=10,
                                                        rwnd=256 * 1024,
                                                        cc_factory=Cubic,
-                                                       retain_request_history=True))
+                                                       retain_request_history=True,
+                                                       telemetry_every_windows=None))
         backend.submit_request(0, "a", 300 * 1024)
         backend.submit_request(1, "b", 300 * 1024)
         flows = [backend.requests[(0, "a")].flow, backend.requests[(1, "b")].flow]

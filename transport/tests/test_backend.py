@@ -5,6 +5,9 @@
 import os
 import subprocess
 import sys
+import warnings
+
+import pytest
 
 from fikore_transport.backend import (BackendConfig, DownloadCancelled,
                                       DownloadCompleted, DownloadProgress,
@@ -18,6 +21,7 @@ MSS = 1500
 def build(**kw):
     kw.setdefault("retain_request_history", True)
     kw.setdefault("retain_arrivals", True)
+    kw.setdefault("telemetry_every_windows", None)
     link = LoopbackLink(LoopbackConfig(rate_bps=20e6, owd_ttis=10, mss=MSS,
                                        queue_bytes=128 * 1024))
     return TransportBackend(link, BackendConfig(mss=MSS, **kw))
@@ -67,7 +71,8 @@ def test_final_window_is_clamped_and_emitted_once():
     link = StateAwareLink()
     backend = TransportBackend(link, BackendConfig(
         mss=MSS, window_ttis=10, horizon_ttis=15,
-        retain_request_history=True, retain_arrivals=True))
+        retain_request_history=True, retain_arrivals=True,
+        telemetry_every_windows=None))
     first = backend.advance()
     second = backend.advance()
     final = backend.advance()
@@ -117,8 +122,9 @@ def test_cancelling_an_unknown_or_finished_request_is_a_no_op():
     backend.cancel_request(0, "x")
 
 
-def test_telemetry_carries_a_measured_round_trip():
-    backend = build(telemetry_every_windows=5)
+def test_deprecated_in_step_telemetry_still_carries_a_measured_round_trip():
+    with pytest.warns(DeprecationWarning, match="NetworkTelemetrySampler"):
+        backend = build(telemetry_every_windows=5)
     backend.submit_request(0, "x", 400 * 1024)
     events = drain(backend, 60)
     telemetry = [e for e in events if isinstance(e, NetworkTelemetryReceived)]
@@ -127,16 +133,18 @@ def test_telemetry_carries_a_measured_round_trip():
     assert rtts and all(10.0 <= r <= 80.0 for r in rtts), rtts
 
 
-def test_partial_final_window_uses_its_actual_telemetry_duration():
-    backend = build()
-    state = {(0, "dl"): {"delivered_bytes_total": 1000}}
-    backend.runner.clock.tti = 10
-    first = backend._telemetry_for(0, state, 0.010)
-    state[(0, "dl")]["delivered_bytes_total"] = 1500
-    backend.runner.clock.tti = 15
-    partial = backend._telemetry_for(0, state, 0.015)
-    assert abs(first.throughput_mbps - 0.8) < 1e-9
-    assert abs(partial.throughput_mbps - 0.8) < 1e-9
+def test_no_telemetry_in_the_step_when_disabled():
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        backend = build(telemetry_every_windows=None)
+    backend.submit_request(0, "x", 400 * 1024)
+    events = drain(backend, 60)
+    assert not [e for e in events if isinstance(e, NetworkTelemetryReceived)]
+
+
+def test_zero_telemetry_cadence_is_rejected():
+    with pytest.raises(ValueError, match="telemetry_every_windows"):
+        build(telemetry_every_windows=0)
 
 
 EVENT_ORDER_SCRIPT = """
@@ -145,7 +153,8 @@ from fikore_transport.link import LoopbackConfig, LoopbackLink
 
 link = LoopbackLink(LoopbackConfig(rate_bps=20e6, owd_ttis=10, mss=1500,
                                    queue_bytes=128 * 1024))
-backend = TransportBackend(link, BackendConfig(mss=1500))
+backend = TransportBackend(link, BackendConfig(mss=1500,
+                                               telemetry_every_windows=None))
 for index in range(8):
     backend.submit_request(0, f"seg-{index}", 64 * 1024)
 for _ in range(100):
@@ -251,7 +260,7 @@ def test_persistent_connection_can_be_reused_with_ack_tail_in_flight():
         rate_bps=20e6, owd_ttis=50, mss=MSS, queue_bytes=128 * 1024))
     backend = TransportBackend(link, BackendConfig(
         mss=MSS, ack_over_link=True, retain_request_history=True,
-        retain_arrivals=True))
+        retain_arrivals=True, telemetry_every_windows=None))
     backend.submit_request(0, "first", 30 * 1024)
     for _ in range(100):
         events = backend.advance().events
@@ -324,36 +333,34 @@ def test_cancellation_after_reuse_uses_object_local_progress():
     assert request.flow.sender.flow not in backend.runner.flows
 
 
-def test_idle_persistent_connection_remains_in_rtt_telemetry():
+def test_idle_persistent_connection_remains_in_transport_stats():
     backend = build()
     backend.submit_request(0, "one", 300 * 1024)
     drain(backend, 300)
-    telemetry = backend._telemetry_for(0, None, backend.runner.clock.s)
-    assert telemetry.rtt_ms is not None
-    assert telemetry.retransmitted_bytes is not None
+    stats = backend.transport_stats(0)
+    assert stats.rtt_ms is not None
+    assert stats.retransmitted_bytes is not None
 
 
-def test_retransmission_telemetry_survives_reuse_and_retirement():
+def test_retransmitted_bytes_survive_reuse_and_retirement():
     link = LoopbackLink(LoopbackConfig(
         rate_bps=20e6, owd_ttis=10, mss=MSS, queue_bytes=4 * MSS))
     backend = TransportBackend(link, BackendConfig(
         mss=MSS, rwnd=128 * 1024, retain_request_history=True,
-        retain_arrivals=True))
+        retain_arrivals=True, telemetry_every_windows=None))
     backend.submit_request(0, "lossy", 300 * 1024)
     events = drain(backend, 1000)
     assert any(isinstance(event, DownloadCompleted) for event in events)
     flow = backend.requests[(0, "lossy")].flow
     assert flow.sender.stats.retransmits > 0
     expected = flow.sender.stats.retransmits * MSS
-    assert backend._telemetry_for(
-        0, None, backend.runner.clock.s).retransmitted_bytes == expected
+    assert backend.transport_stats(0).retransmitted_bytes == expected
 
     backend.submit_request(0, "cancel", MSS)
     backend.cancel_request(0, "cancel")
     drain(backend, 2)
     assert flow.sender.flow not in backend.runner.flows
-    assert backend._telemetry_for(
-        0, None, backend.runner.clock.s).retransmitted_bytes == expected
+    assert backend.transport_stats(0).retransmitted_bytes == expected
 
 
 def test_unknown_tcp_connection_mode_is_rejected():
@@ -394,7 +401,8 @@ def test_close_cleans_active_connections_callbacks_and_link_mappings():
 
     link = TrackingLink()
     backend = TransportBackend(link, BackendConfig(
-        mss=MSS, ack_over_link=True, retain_request_history=False))
+        mss=MSS, ack_over_link=True, retain_request_history=False,
+        telemetry_every_windows=None))
     backend.submit_request(0, "idle", 30 * 1024)
     drain(backend, 100)
     backend.submit_request(0, "active", 4 * 1024 * 1024)
@@ -431,7 +439,8 @@ def test_completed_objects_do_not_remain_in_the_per_tti_flow_registry():
 def test_default_backend_drops_heavy_history_but_never_reuses_an_id():
     link = LoopbackLink(LoopbackConfig(rate_bps=20e6, owd_ttis=10, mss=MSS,
                                        queue_bytes=128 * 1024))
-    backend = TransportBackend(link, BackendConfig(mss=MSS))
+    backend = TransportBackend(link, BackendConfig(mss=MSS,
+                                                   telemetry_every_windows=None))
     backend.submit_request(0, "seg", 30 * 1024)
     for _ in range(100):
         if any(isinstance(event, DownloadCompleted)

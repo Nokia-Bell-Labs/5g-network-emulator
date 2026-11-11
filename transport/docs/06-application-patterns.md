@@ -124,8 +124,34 @@ every object new TCP state. The backend maps connection byte ranges to:
 
 - `DownloadProgress`;
 - `DownloadCompleted`;
-- `DownloadCancelled`;
-- `NetworkTelemetryReceived`.
+- `DownloadCancelled`.
+
+Network telemetry is not part of that stream. A caller that wants it creates a
+sampler next to the backend and polls it after each step:
+
+```python
+backend = TransportBackend(link, BackendConfig(window_ttis=10,
+                                               telemetry_every_windows=None))
+sampler = backend.telemetry_sampler(ue_ids=[0, 1], interval_s=1.0)
+
+while True:
+    step = backend.advance()
+    ...                                    # byte events
+    for sample in sampler.poll(force=step.is_final):
+        ...                                # NetworkTelemetryReceived
+    if step.is_final:
+        break
+```
+
+The sampler reads cumulative per-UE counters from the link's
+`network_counters()` and reports rates over each interval. `FikoreLink` maps its
+`ue_state` snapshots, `LoopbackLink` counts its own queue, and any other link
+can implement the same method. RTT and retransmitted bytes come from
+`TransportBackend.transport_stats()`, not from the link.
+
+`BackendConfig.telemetry_every_windows` (default 1) still emits
+`NetworkTelemetryReceived` inside `NetworkStep`, but it is deprecated and warns.
+Set it to `None` for new code; it will be removed.
 
 The request ID belongs to the application; segment tags belong to the Link.
 Neither is inferred from the other.

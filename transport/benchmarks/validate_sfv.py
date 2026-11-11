@@ -99,7 +99,7 @@ def main() -> int:
             horizon_ttis=int(float(config["duration_s"]) * 1000),
             rwnd=128 * 1024,
             cc_factory=Cubic,
-            telemetry_every_windows=10,
+            telemetry_every_windows=None,
             tcp_connection_mode=args.tcp_connection_mode,
         )
         backend = TransportBackend(link, backend_config)
