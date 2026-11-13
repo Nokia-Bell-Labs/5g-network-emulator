@@ -42,6 +42,9 @@ struct tick_context
     // in this vector (ids are handed out in order); ue::get_id() returns it, and
     // ue::get_control_id() is the same id as text, or the name given in the configuration.
     const std::vector<ue> &ues;
+    // Scheduled over available RBGs of each grid in the previous TTI, 0 to 1. Indexed by
+    // tx_dir. 0 when the grid had no RBG available, as in an uplink slot of TDD.
+    float rbg_utilization[2] = {0.0f, 0.0f};
 };
 
 class controller

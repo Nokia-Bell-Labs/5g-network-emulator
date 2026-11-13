@@ -94,6 +94,7 @@ struct call_record
     double sim_t;
     std::size_t n_ues;
     std::vector<ue_state> state;
+    float rbg_utilization[2];
 };
 std::vector<call_record> g_calls;
 std::map<std::string, int> g_constructed;
@@ -105,7 +106,8 @@ struct probe : public controller
     explicit probe(std::string n) : name_(std::move(n)) {}
     void on_tick(const tick_context &ctx) override
     {
-        g_calls.push_back({name_, ctx.tti, ctx.sim_t, ctx.ues.size(), snapshot(ctx.ues)});
+        g_calls.push_back({name_, ctx.tti, ctx.sim_t, ctx.ues.size(), snapshot(ctx.ues),
+                           {ctx.rbg_utilization[TX_DL], ctx.rbg_utilization[TX_UL]}});
     }
 };
 
@@ -215,6 +217,16 @@ void test_controller_contract()
         // After control_manager::tick(): the command due at TTI 10 is already applied.
         assert(near(c.state[0].priority, k >= 10 ? 8.0 : 1.0));
     }
+    // The load of the grids is the one of the previous TTI: nothing before the first MAC
+    // step, and then the saturated UEs of the scenario keep the downlink busy.
+    assert(g_calls[0].rbg_utilization[TX_DL] == 0.0f && g_calls[0].rbg_utilization[TX_UL] == 0.0f);
+    unsigned int busy = 0;
+    for (unsigned int k = 1; k < n; k++)
+    {
+        assert(g_calls[k].rbg_utilization[TX_DL] >= 0.0f && g_calls[k].rbg_utilization[TX_DL] <= 1.0f);
+        if (g_calls[k].rbg_utilization[TX_DL] > 0.5f) busy++;
+    }
+    assert(busy >= n / 2);
     // The controller reads and nothing else: the run ends where the reference one did.
     assert(snapshot(*sim.ue_list()) == after[n]);
 }

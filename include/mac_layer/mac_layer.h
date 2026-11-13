@@ -50,6 +50,10 @@ public:
 
 public: 
     void flush_logs(); 
+    const grid_step_metrics &get_last_step_metrics(int tx_dir) const
+    {
+        return tx_dir == TX_DL ? grid_dl.get_last_step_metrics() : grid_ul.get_last_step_metrics();
+    }
 
 private: 
     void update_ts(double t);

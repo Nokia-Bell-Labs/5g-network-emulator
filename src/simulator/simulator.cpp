@@ -243,7 +243,9 @@ void simulator::step(std::uint64_t _ts)
     // previous TTI; the controllers run before the MAC step of this TTI.
     if (!controllers.empty())
     {
-        const tick_context ctx{ts, total_steps - 1, *ue_h.get_ue_list()};
+        const tick_context ctx{ts, total_steps - 1, *ue_h.get_ue_list(),
+                               {mac_l.get_last_step_metrics(TX_DL).utilization_ratio,
+                                mac_l.get_last_step_metrics(TX_UL).utilization_ratio}};
         for (controller_instance &c : controllers)
         {
             try
