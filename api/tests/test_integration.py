@@ -115,6 +115,24 @@ def test_set_is_reflected_by_asking_the_emulator(client):
     assert client.get("/ue/0/state").json()["control"]["priority"] == 2.5
 
 
+def test_textual_ue_id_set_and_state(client):
+    textual = "controlDemo_0"
+    assert client.post(f"/control/ue/{textual}", json={"priority": 4.0}).status_code == 200
+    state = client.get(f"/ue/{textual}/state").json()
+    assert state["ue_id"] == textual
+    assert state["control"]["priority"] == 4.0
+    assert state["control"]["target"] == "ue/0"
+
+    assert client.post(f"/control/ue/{textual}", json={"priority": 2.5}).status_code == 200
+    assert client.get(f"/ue/{textual}/state").json()["control"]["priority"] == 2.5
+
+
+def test_numeric_ue_id_in_state_is_int(client):
+    state = client.get("/ue/0/state").json()
+    assert state["ue_id"] == 0
+    assert isinstance(state["ue_id"], int)
+
+
 def test_units_travel_unchanged(client):
     client.post("/control/ue/0", json={"mobility.speed_kmh": 36.0})
     assert client.get("/ue/0/state").json()["control"]["mobility.speed_kmh"] == pytest.approx(36.0, rel=1e-3)

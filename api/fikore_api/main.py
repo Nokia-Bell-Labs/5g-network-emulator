@@ -193,7 +193,7 @@ async def telemetry_snapshot() -> Dict[str, Any]:
 
 
 @app.post("/control/ue/{ue_id}")
-async def set_ue(ue_id: int, values: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+async def set_ue(ue_id: str, values: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
     return _forward(control.set, f"ue/{ue_id}", values)
 
 
@@ -206,7 +206,7 @@ async def set_batch(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
 
 
 @app.get("/ue/{ue_id}/state")
-async def ue_state(ue_id: int) -> Dict[str, Any]:
+async def ue_state(ue_id: str) -> Dict[str, Any]:
     # Control state comes from the emulator every time; only the metrics come from cache.
     reply = _forward(control.get, f"ue/{ue_id}")
     result = reply.get("result") or []
@@ -219,11 +219,25 @@ async def ue_state(ue_id: int) -> Dict[str, Any]:
     # needs, and unlike the telemetry cache it is exact and in simulated time.
     state = control_state.pop("state", {})
 
+    numeric_index: Optional[int] = None
+    target = control_state.get("target")
+    if isinstance(target, str) and target.startswith("ue/"):
+        suffix = target[3:]
+        if suffix.isdigit():
+            numeric_index = int(suffix)
+
+    if ue_id.isdigit():
+        response_ue_id: Any = int(ue_id)
+    else:
+        response_ue_id = ue_id
+
+    telemetry = collector.cache.for_ue(numeric_index) if numeric_index is not None else {}
+
     return {
-        "ue_id": ue_id,
+        "ue_id": response_ue_id,
         "control": control_state,
         "state": state,
-        "telemetry": collector.cache.for_ue(ue_id),
+        "telemetry": telemetry,
         "tti": reply.get("tti"),
         "t": reply.get("t"),
     }
