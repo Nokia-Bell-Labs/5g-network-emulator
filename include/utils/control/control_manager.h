@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -23,6 +24,7 @@
 #include <utils/control/command.h>
 #include <utils/control/control_config.h>
 #include <utils/control/control_transport.h>
+#include <utils/control/ue_overrides.h>
 #include <utils/run_status.h>
 
 class ue;
@@ -86,6 +88,13 @@ private:
     std::string read_object_events(const command &c, ack &a);
     void warn_priority_under_rr();
 
+    // The quota and the shared cap of a slice are set through any of its UEs but belong
+    // to the slice. validate_slices() rejects a message that would leave a slice with
+    // min above max, or the minimums of the cell above 100 %; sync_slices() records what
+    // the message set and copies it to every member.
+    bool validate_slices(const command &c, const std::vector<ue *> &targets, ack &a) const;
+    void sync_slices(const command &c, const std::vector<ue *> &targets);
+
 private:
     struct scheduled
     {
@@ -115,8 +124,17 @@ private:
         double radio_dropped_bytes = 0.0;
         double ce_bytes = 0.0;
     };
+    struct slice_config
+    {
+        float min_quota_pct = 0.0f;
+        float max_quota_pct = 100.0f;
+        float rmax_bps[2] = {0.0f, 0.0f};
+    };
 
 private:
+    // Indexed by slice id; entry 0 is never configured.
+    std::array<slice_config, MAX_SLICES> slices_{};
+
     bool enabled_ = false;
     std::vector<ue *> ue_index_;          // by ue id, stable after ue_handler::init()
     std::unordered_map<std::string, ue *> ue_name_index_;

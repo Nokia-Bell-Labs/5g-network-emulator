@@ -471,6 +471,7 @@ void ue::emit_pdcp_monitoring()
     ul_point.measurement = "ue_pdcp";
     ul_point.tags["ue_id"] = std::to_string(id);
     ul_point.tags["tx_dir"] = tx_dir_tag(TX_UL);
+    ul_point.tags["slice_id"] = std::to_string(ctl.slice_id);
     ul_point.ts_ns = ts_ns;
     ul_point.fields["throughput_mbps_mean"] = make_metric_field(pdcp_ul.get_tp(true), field_aggregation::mean);
     ul_point.fields["generated_mbps_sum"] = make_metric_field(pdcp_ul.get_generated(true), field_aggregation::sum);
@@ -493,6 +494,7 @@ void ue::emit_pdcp_monitoring()
     dl_point.measurement = "ue_pdcp";
     dl_point.tags["ue_id"] = std::to_string(id);
     dl_point.tags["tx_dir"] = tx_dir_tag(TX_DL);
+    dl_point.tags["slice_id"] = std::to_string(ctl.slice_id);
     dl_point.ts_ns = ts_ns;
     dl_point.fields["throughput_mbps_mean"] = make_metric_field(pdcp_dl.get_tp(true), field_aggregation::mean);
     dl_point.fields["generated_mbps_sum"] = make_metric_field(pdcp_dl.get_generated(true), field_aggregation::sum);
@@ -671,6 +673,7 @@ void ue::emit_phy_monitoring()
     dl_point.measurement = "ue_phy";
     dl_point.tags["ue_id"] = std::to_string(id);
     dl_point.tags["tx_dir"] = tx_dir_tag(TX_DL);
+    dl_point.tags["slice_id"] = std::to_string(ctl.slice_id);
     dl_point.ts_ns = ts_ns;
     dl_point.fields["sinr_db_mean"] = make_metric_field(phy_dl.get_mean_sinr(), field_aggregation::mean);
     dl_point.fields["rsrp_db_mean"] = make_metric_field(phy_dl.get_mean_rsrp(), field_aggregation::mean);
@@ -699,6 +702,7 @@ void ue::emit_phy_monitoring()
     ul_point.measurement = "ue_phy";
     ul_point.tags["ue_id"] = std::to_string(id);
     ul_point.tags["tx_dir"] = tx_dir_tag(TX_UL);
+    ul_point.tags["slice_id"] = std::to_string(ctl.slice_id);
     ul_point.ts_ns = ts_ns;
     ul_point.fields["sinr_db_mean"] = make_metric_field(phy_ul.get_mean_sinr(), field_aggregation::mean);
     ul_point.fields["rsrp_db_mean"] = make_metric_field(phy_ul.get_mean_rsrp(), field_aggregation::mean);

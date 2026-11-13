@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 
@@ -503,7 +504,127 @@ bool control_manager::validate(const command &c, std::vector<ue *> &targets, ack
         }
     }
 
+    if (a.errors.empty()) validate_slices(c, targets, a);
     return a.errors.empty();
+}
+
+namespace
+{
+bool is_slice_config_key(const std::string &key)
+{
+    return key == "slice.min_quota_pct" || key == "slice.max_quota_pct"
+        || key == "dl.slice_rmax_mbps" || key == "ul.slice_rmax_mbps";
+}
+
+double set_value(const param_value &v)
+{
+    const double *d = std::get_if<double>(&v);
+    return d != nullptr ? *d : 0.0;
+}
+
+template <typename slice_config_t>
+void apply_slice_sets(const command &c, slice_config_t &cfg)
+{
+    for (size_t i = 0; i < c.sets.size(); i++)
+    {
+        const std::string &key = c.sets[i].first;
+        const double v = set_value(c.sets[i].second);
+        if (key == "slice.min_quota_pct") cfg.min_quota_pct = (float)v;
+        else if (key == "slice.max_quota_pct") cfg.max_quota_pct = (float)v;
+        else if (key == "dl.slice_rmax_mbps") cfg.rmax_bps[TX_DL] = (float)(v * MBIT2BIT);
+        else if (key == "ul.slice_rmax_mbps") cfg.rmax_bps[TX_UL] = (float)(v * MBIT2BIT);
+    }
+}
+}
+
+bool control_manager::validate_slices(const command &c, const std::vector<ue *> &targets, ack &a) const
+{
+    bool moves = false, configures = false;
+    double new_slice = 0.0;
+    for (size_t i = 0; i < c.sets.size(); i++)
+    {
+        if (c.sets[i].first == "slice_id")
+        {
+            moves = true;
+            new_slice = set_value(c.sets[i].second);
+            if (std::floor(new_slice) != new_slice)
+            {
+                ack_error err; err.key = "slice_id"; err.reason = "slice_id must be an integer";
+                a.errors.push_back(err);
+                return false;
+            }
+        }
+        else if (is_slice_config_key(c.sets[i].first)) configures = true;
+    }
+    if (!moves && !configures) return true;
+
+    std::array<slice_config, MAX_SLICES> next = slices_;
+    std::vector<int> member_slice(ue_list_->size(), 0);
+    for (size_t i = 0; i < ue_list_->size(); i++) member_slice[i] = (*ue_list_)[i].overrides().slice_id;
+
+    for (size_t t = 0; t < targets.size(); t++)
+    {
+        const int s = moves ? (int)new_slice : targets[t]->overrides().slice_id;
+        member_slice[(size_t)targets[t]->get_id()] = s;
+        if (!configures) continue;
+        if (s == 0)
+        {
+            ack_error err; err.key = targets[t]->get_control_id();
+            err.reason = "the UE is in no slice: a slice quota or cap needs slice_id > 0";
+            a.errors.push_back(err);
+            return false;
+        }
+        apply_slice_sets(c, next[(size_t)s]);
+    }
+
+    std::array<bool, MAX_SLICES> used{};
+    for (size_t i = 0; i < member_slice.size(); i++) used[(size_t)member_slice[i]] = true;
+
+    double min_sum = 0.0;
+    for (int s = 1; s < MAX_SLICES; s++)
+    {
+        if (!used[(size_t)s]) continue;
+        if (next[(size_t)s].min_quota_pct > next[(size_t)s].max_quota_pct)
+        {
+            ack_error err; err.key = "slice.min_quota_pct";
+            err.reason = "above slice.max_quota_pct in slice " + std::to_string(s);
+            a.errors.push_back(err);
+            return false;
+        }
+        min_sum += next[(size_t)s].min_quota_pct;
+    }
+    if (min_sum > 100.0 + 1e-6)
+    {
+        ack_error err; err.key = "slice.min_quota_pct";
+        err.reason = "the minimum quotas of the slices of the cell add up to more than 100";
+        a.errors.push_back(err);
+        return false;
+    }
+    return true;
+}
+
+void control_manager::sync_slices(const command &c, const std::vector<ue *> &targets)
+{
+    bool touches = false;
+    for (size_t i = 0; i < c.sets.size(); i++)
+        if (c.sets[i].first == "slice_id" || is_slice_config_key(c.sets[i].first)) touches = true;
+    if (!touches) return;
+
+    for (size_t t = 0; t < targets.size(); t++)
+    {
+        const int s = targets[t]->overrides().slice_id;
+        if (s > 0) apply_slice_sets(c, slices_[(size_t)s]);
+    }
+
+    for (size_t i = 0; i < ue_list_->size(); i++)
+    {
+        ue_overrides &o = (*ue_list_)[i].overrides();
+        const slice_config cfg = o.slice_id > 0 ? slices_[(size_t)o.slice_id] : slice_config();
+        o.slice_min_quota_pct = cfg.min_quota_pct;
+        o.slice_max_quota_pct = cfg.max_quota_pct;
+        o.slice_rmax_bps[TX_DL] = cfg.rmax_bps[TX_DL];
+        o.slice_rmax_bps[TX_UL] = cfg.rmax_bps[TX_UL];
+    }
 }
 
 void control_manager::apply(const command &c, double sim_t, std::int64_t tti)
@@ -618,6 +739,7 @@ void control_manager::apply(const command &c, double sim_t, std::int64_t tti)
             if (c.sets[i].first == "priority") warn_priority_under_rr();
         }
     }
+    sync_slices(c, targets);
 
     a.ok = a.errors.empty();
     if (a.ok) applied_in_tick_++;

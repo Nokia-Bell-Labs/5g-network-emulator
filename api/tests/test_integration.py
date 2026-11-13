@@ -93,9 +93,11 @@ def test_healthz_reports_the_link(client):
 def test_schema_matches_describe(client):
     body = client.get("/schema").json()
     names = {param["name"] for param in body["params"]}
-    assert len(names) == 14
+    assert len(names) == 19
     assert "mobility.speed_kmh" in names
     assert next(p for p in body["params"] if p["name"] == "mobility.speed_kmh")["unit"] == "km/h"
+    assert next(p for p in body["params"] if p["name"] == "slice.min_quota_pct")["unit"] == "%"
+    assert next(p for p in body["params"] if p["name"] == "ul.slice_rmax_mbps")["unit"] == "Mbps"
 
     # Injection is the only incremental knob and the schema has to say so, because
     # retrying it is not free.

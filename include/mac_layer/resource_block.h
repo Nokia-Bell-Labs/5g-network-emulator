@@ -7,15 +7,31 @@
 #ifndef RESOURCE_BLOCK_H
 #define RESOURCE_BLOCK_H
 
+#include <array>
 #include <string>
 #include <algorithm>
 
 #include <mac_layer/metric_handler.h>
 #include <ue/ue.h>
+#include <utils/control/ue_overrides.h>
 
 // Logging
 
 #include "utils/logging/log_handler.h"
+
+//--------------------------------------------------------------------------------------------------
+// slice_mask: which slices may take one RBG, built by grid::step() for each RBG.
+//      * allowed: slices that may compete for it at all (below their maximum quota and with
+//        tokens left in their shared cap). Entry 0, no slice, is always allowed.
+//      * preferred: slices below their minimum quota. When any UE of a preferred slice is a
+//        candidate, the RBG goes to the best of those; otherwise to the best allowed one, so
+//        that a guarantee nobody can use does not leave the RBG empty.
+//--------------------------------------------------------------------------------------------------
+struct slice_mask
+{
+    std::array<bool, MAX_SLICES> allowed{};
+    std::array<bool, MAX_SLICES> preferred{};
+};
 
 //--------------------------------------------------------------------------------------------------
 // rb(): class which is in charge of assigning the best UE to the current RB/RBG. This class gets the
@@ -53,7 +69,9 @@ private:
 public: 
     // n_enabled: how many UEs are enabled this TTI. The round robin wraps on it, so it
     // has to be the same number for every RBG and every UE of the step.
-    void estimate_params(int syms, double current_t, int n_enabled);
+    // mask: nullptr when no slice has a quota or a cap, which is the selection as it
+    // always was.
+    void estimate_params(int syms, double current_t, int n_enabled, const slice_mask *mask = nullptr);
     // Handle Packets
     float handle_packet(int syms);
     bool was_scheduled() const { return last_scheduled; }

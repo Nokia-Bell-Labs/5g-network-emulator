@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -124,6 +125,10 @@ private:
     double current_t = 0;
     std::vector<ue> *ue_list = nullptr;
     grid_step_metrics last_step_metrics;
+    // Bucket of the shared cap of each slice. Each grid has its own, which is what makes it
+    // per direction: grid_dl and grid_ul step concurrently and must not share it.
+    std::array<float, MAX_SLICES> slice_tokens{};
+    std::array<float, MAX_SLICES> slice_rmax_seen{};
 };
            
     

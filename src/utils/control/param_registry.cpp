@@ -158,6 +158,47 @@ void add_directional(std::vector<param_entry> &out, int tx_dir)
         }));
 }
 
+// Slice knobs. Set on a UE, they configure its slice: control_manager copies the quota
+// and the shared cap to every other member, and checks the quotas of the whole cell
+// before anything is applied. Appended after the rest so that the order of the older
+// entries does not move.
+void add_slice_entries(std::vector<param_entry> &out)
+{
+    out.push_back(number("slice_id", "", 0.0, (double)(MAX_SLICES - 1),
+        "Network slice of the UE. 0 = no slice. Moving a UE into a slice gives it the "
+        "quota and the shared cap the slice already has.",
+        [](ue &u, double v, std::string &reason) {
+            if (std::floor(v) != v) { reason = "slice_id must be an integer"; return false; }
+            u.overrides().slice_id = (int)v;
+            return true;
+        },
+        [](ue &u) { return (double)u.overrides().slice_id; }));
+
+    out.push_back(number("slice.min_quota_pct", "%", 0.0, 100.0,
+        "Share of the RBGs of each TTI guaranteed to the slice of the UE while any of its "
+        "UEs has data. The sum over the slices of the cell cannot exceed 100.",
+        [](ue &u, double v, std::string &) { u.overrides().slice_min_quota_pct = (float)v; return true; },
+        [](ue &u) { return (double)u.overrides().slice_min_quota_pct; }));
+
+    out.push_back(number("slice.max_quota_pct", "%", 0.0, 100.0,
+        "Largest share of the RBGs of each TTI that the slice of the UE may take.",
+        [](ue &u, double v, std::string &) { u.overrides().slice_max_quota_pct = (float)v; return true; },
+        [](ue &u) { return (double)u.overrides().slice_max_quota_pct; }));
+
+    for (int tx_dir = 0; tx_dir < 2; tx_dir++)
+    {
+        const std::string p = (tx_dir == TX_DL) ? "dl." : "ul.";
+        out.push_back(number(p + "slice_rmax_mbps", "Mbps", 0.0, UNBOUNDED,
+            "Rate cap over the air shared by every UE of the slice of the UE, as a token "
+            "bucket in the scheduler. 0 disables the cap.",
+            [tx_dir](ue &u, double mbps, std::string &) {
+                u.overrides().slice_rmax_bps[tx_dir] = (float)(mbps * MBIT2BIT);
+                return true;
+            },
+            [tx_dir](ue &u) { return (double)u.overrides().slice_rmax_bps[tx_dir] / MBIT2BIT; }));
+    }
+}
+
 bool valid_utf8(const std::string &s)
 {
     const size_t n = s.size();
@@ -252,6 +293,8 @@ std::vector<param_entry> builtin_entries()
             return true;
         },
         [](ue &u) { return (double)u.mobility().get_speed() / (TOMS); }));
+
+    add_slice_entries(out);
 
     return out;
 }

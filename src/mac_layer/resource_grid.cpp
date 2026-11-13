@@ -154,9 +154,77 @@ void grid::step()
             it->prepare_scheduler_tti(tx, scheduler_active);
         }
     }
+
+    // Slices. Every member carries the same copy of the slice configuration, so the
+    // first one met is as good as any. With no quota and no cap anywhere the mask stays
+    // off and the selection is the one without slices.
+    std::array<bool, MAX_SLICES> slice_present{};
+    std::array<int, MAX_SLICES> min_rbgs{};
+    std::array<int, MAX_SLICES> max_rbgs{};
+    std::array<float, MAX_SLICES> slice_rmax{};
+    bool slicing = false;
+    if (ue_list != nullptr)
+    {
+        for (std::vector<ue>::iterator it = ue_list->begin(); it != ue_list->end(); ++it)
+        {
+            const ue_overrides &o = it->overrides();
+            const size_t s = (size_t)o.slice_id;
+            if (s == 0 || slice_present[s]) continue;
+            slice_present[s] = true;
+            min_rbgs[s] = (int)std::ceil(n_freq_rbg * o.slice_min_quota_pct / 100.0f);
+            max_rbgs[s] = (int)std::floor(n_freq_rbg * o.slice_max_quota_pct / 100.0f);
+            slice_rmax[s] = o.slice_rmax_bps[tx];
+            if (o.slice_min_quota_pct > 0.0f || o.slice_max_quota_pct < 100.0f || o.slice_rmax_bps[tx] > 0.0f)
+                slicing = true;
+        }
+    }
+    for (int s = 1; s < MAX_SLICES; s++)
+    {
+        if (slice_rmax[s] > 0.0f)
+        {
+            // Same bucket as the per-UE cap: one TTI deep, and full when the cap comes in.
+            const float depth = slice_rmax[s] * TTI_S;
+            slice_tokens[s] = slice_rmax_seen[s] > 0.0f ? std::min(slice_tokens[s] + depth, depth) : depth;
+        }
+        slice_rmax_seen[s] = slice_rmax[s];
+    }
+    slice_mask mask;
+    std::array<int, MAX_SLICES> slice_rbgs{};
+    auto build_mask = [&]()
+    {
+        mask.allowed[0] = true;
+        for (int s = 1; s < MAX_SLICES; s++)
+        {
+            mask.allowed[s] = slice_present[s]
+                && slice_rbgs[s] < max_rbgs[s]
+                && (slice_rmax[s] <= 0.0f || slice_tokens[s] > 0.0f);
+            mask.preferred[s] = mask.allowed[s] && slice_rbgs[s] < min_rbgs[s];
+        }
+        return slicing ? &mask : nullptr;
+    };
     std::vector<bool> scheduled_ues(ue_list != nullptr ? ue_list->size() : 0, false);
     for (int t = 0; t < n_time_rbg; t++)
     {
+        slice_rbgs.fill(0);
+        auto plan_rbg = [&](int f)
+        {
+            rb_grid[t][f].estimate_params(syms, current_t, n_enabled, build_mask());
+            const int ue_index = rb_grid[t][f].planned_ue_index();
+            if (slicing && ue_index >= 0)
+            {
+                const int s = (*ue_list)[ue_index].overrides().slice_id;
+                if (s > 0) slice_rbgs[s]++;
+            }
+            return ue_index;
+        };
+        auto charge_slice = [&](int f)
+        {
+            if (!slicing || !rb_grid[t][f].was_scheduled()) return;
+            ue &u = (*ue_list)[rb_grid[t][f].last_ue_index()];
+            const int s = u.overrides().slice_id;
+            if (s > 0 && slice_rmax[s] > 0.0f)
+                slice_tokens[s] -= (float)u.pdcp_state(tx).last_charged_grant_bits();
+        };
         if (duplexing_t == TDD)
             syms = tdd_h.get_syms();
         else
@@ -195,8 +263,7 @@ void grid::step()
             // allocation for this time group before deriving per-PRB power and MCS.
             for (int f = 0; f < n_freq_rbg; f++)
             {
-                rb_grid[t][f].estimate_params(syms, current_t, n_enabled);
-                const int ue_index = rb_grid[t][f].planned_ue_index();
+                const int ue_index = plan_rbg(f);
                 if (ue_index >= 0)
                     (*ue_list)[ue_index].record_provisional_scheduler_service(
                         tx, rb_grid[t][f].planned_scheduled_bits(syms));
@@ -216,6 +283,7 @@ void grid::step()
             for (int f = 0; f < n_freq_rbg; f++)
             {
                 rb_grid[t][f].handle_packet(syms);
+                charge_slice(f);
                 record_rbg(f);
             }
         }
@@ -223,12 +291,12 @@ void grid::step()
         {
             for (int f = 0; f < n_freq_rbg; f++)
             {
-                rb_grid[t][f].estimate_params(syms, current_t, n_enabled);
-                const int ue_index = rb_grid[t][f].planned_ue_index();
+                const int ue_index = plan_rbg(f);
                 if (ue_index >= 0)
                     (*ue_list)[ue_index].record_provisional_scheduler_service(
                         tx, rb_grid[t][f].planned_scheduled_bits(syms));
                 rb_grid[t][f].handle_packet(syms);
+                charge_slice(f);
                 record_rbg(f);
             }
         }

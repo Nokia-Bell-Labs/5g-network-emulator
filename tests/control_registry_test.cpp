@@ -22,7 +22,7 @@ namespace
 // Knobs added from file-scope static objects, the way an extension registers them. They
 // write into variables the test can see, which is all an apply function has to do to be
 // observable. They are in the catalogue of this whole test binary, hence the counts below.
-const size_t N_BUILTIN = 14;
+const size_t N_BUILTIN = 19;
 const size_t N_REGISTERED = 3;
 
 double g_gain_db = 0.0;
@@ -193,8 +193,9 @@ void test_catalogue_shape()
 {
     const param_registry &reg = param_registry::instance();
 
-    // The built-in catalogue is deliberately small: fourteen knobs, no more, until the
-    // plan says so. The registered ones of this test come after them.
+    // The built-in catalogue is deliberately small: fourteen knobs plus the five of the
+    // slices, no more, until the plan says so. The registered ones of this test come
+    // after them.
     assert(reg.entries().size() == N_BUILTIN + N_REGISTERED);
 
     // The names of the built-in knobs as the constructor registers them. The order is
@@ -203,7 +204,9 @@ void test_catalogue_shape()
         "priority", "enabled",
         "dl.rmax_mbps", "dl.inject_bytes", "dl.sinr_offset_db", "traffic.dl_target_mbps",
         "ul.rmax_mbps", "ul.inject_bytes", "ul.sinr_offset_db", "traffic.ul_target_mbps",
-        "mobility.pos_x_m", "mobility.pos_y_m", "pkt_delay_budget_s", "mobility.speed_kmh"
+        "mobility.pos_x_m", "mobility.pos_y_m", "pkt_delay_budget_s", "mobility.speed_kmh",
+        "slice_id", "slice.min_quota_pct", "slice.max_quota_pct",
+        "dl.slice_rmax_mbps", "ul.slice_rmax_mbps"
     };
     assert(sizeof(expected) / sizeof(expected[0]) == N_BUILTIN);
     for (size_t i = 0; i < N_BUILTIN; i++)
@@ -229,7 +232,7 @@ void test_catalogue_shape()
     for (size_t i = 0; i < N_BUILTIN; i++)
     {
         const param_entry &e = reg.entries()[i];
-        const bool dimensionless = (e.name == "priority" || e.name == "enabled");
+        const bool dimensionless = (e.name == "priority" || e.name == "enabled" || e.name == "slice_id");
         assert(dimensionless == e.unit.empty());
     }
 }
@@ -380,7 +383,7 @@ void test_registered_knobs_are_described()
 
     // Built-ins keep their place at the head of the list.
     assert(j[0]["name"] == "priority");
-    assert(j[N_BUILTIN - 1]["name"] == "mobility.speed_kmh");
+    assert(j[N_BUILTIN - 1]["name"] == "ul.slice_rmax_mbps");
 
     const nlohmann::json *gain = find_described(j, "test.knob_gain_db");
     assert(gain != nullptr);

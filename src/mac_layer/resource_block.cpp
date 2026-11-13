@@ -45,32 +45,53 @@ bool rb::check_ue_assignment()
     return false; 
 }
  
-void rb::estimate_params(int syms, double _current_t, int n_enabled)
+namespace
+{
+void keep_best(std::vector<schedule_candidate> &tied, float &best_metric, const schedule_candidate &candidate)
+{
+    if (candidate.metric > best_metric + 1e-6f)
+    {
+        best_metric = candidate.metric;
+        tied.clear();
+        tied.push_back(candidate);
+    }
+    else if (std::fabs(candidate.metric - best_metric) <= 1e-6f)
+    {
+        tied.push_back(candidate);
+    }
+}
+}
+
+void rb::estimate_params(int syms, double _current_t, int n_enabled, const slice_mask *mask)
 {
     int index = 0; 
     current_t = _current_t;
     if(syms > 0)
     {
         std::vector<schedule_candidate> tied_candidates;
+        std::vector<schedule_candidate> tied_preferred;
         float best_metric = -std::numeric_limits<float>::infinity();
+        float best_preferred = -std::numeric_limits<float>::infinity();
         for(std::vector<ue>::iterator it = ue_list->begin(); it != ue_list->end(); ++it)
         {
             schedule_candidate candidate = it->get_schedule_candidate(tx, f, n_enabled, index);
             if (candidate.has_data)
             {
-                if (candidate.metric > best_metric + 1e-6f)
+                if (mask == nullptr)
+                    keep_best(tied_candidates, best_metric, candidate);
+                else
                 {
-                    best_metric = candidate.metric;
-                    tied_candidates.clear();
-                    tied_candidates.push_back(candidate);
-                }
-                else if (std::fabs(candidate.metric - best_metric) <= 1e-6f)
-                {
-                    tied_candidates.push_back(candidate);
+                    const size_t s = (size_t)it->overrides().slice_id;
+                    if (mask->preferred[s])
+                        keep_best(tied_preferred, best_preferred, candidate);
+                    if (mask->allowed[s])
+                        keep_best(tied_candidates, best_metric, candidate);
                 }
             }
             index++; 
         }
+        if (!tied_preferred.empty())
+            tied_candidates.swap(tied_preferred);
         if (!tied_candidates.empty())
         {
             size_t selected = 0;

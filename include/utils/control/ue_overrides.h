@@ -8,6 +8,10 @@
 
 #include <common/direction.h>
 
+// Slice ids go from 1 to MAX_SLICES - 1. Id 0 is no slice: a UE there competes outside of
+// every quota and every shared cap.
+constexpr int MAX_SLICES = 64;
+
 //--------------------------------------------------------------------------------------------------
 // ue_overrides(): per-UE runtime control state. Plain data, owned by the ue it belongs
 // to, contiguous and free of pointers, so that reading it from the scheduling hot path
@@ -47,6 +51,16 @@ struct ue_overrides
     // to split an RBG.
     float rmax_bps[2] = {0.0f, 0.0f};
     float rmax_tokens[2] = {0.0f, 0.0f};
+
+    // Network slice. The quota and the shared cap belong to the slice, not to the UE:
+    // control_manager keeps them equal in every UE of the same slice, so the scheduler
+    // reads them from whichever member it meets first. The bucket of the shared cap is
+    // not here but in each grid, which is what keeps grid_dl and grid_ul, running
+    // concurrently, off each other's memory.
+    int slice_id = 0;
+    float slice_min_quota_pct = 0.0f;
+    float slice_max_quota_pct = 100.0f;
+    float slice_rmax_bps[2] = {0.0f, 0.0f};
 
     // Derived state, not a knob: dense position of this UE among the enabled ones.
     // Recomputed by control_manager::tick whenever the enabled set changes. Round robin
