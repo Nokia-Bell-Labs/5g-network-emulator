@@ -13,6 +13,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y --no-ins
   python3-matplotlib \
   python3-numpy \
   python3-pip \
+  python3-pytest \
   python3-venv \
   sudo \
   && rm -rf /var/lib/apt/lists/*
