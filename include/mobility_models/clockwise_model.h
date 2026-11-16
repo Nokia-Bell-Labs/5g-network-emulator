@@ -53,7 +53,7 @@ public:
             float x = radius * cos(angle);
             float y = radius * sin(angle);
 
-            if (fabs(x) <= max_apothem && fabs(y) <= max_apothem)
+            if (admits_step(x, y))
             {
                 current_pos = pos2d(x, y);
             }

@@ -11,6 +11,20 @@
 
 namespace
 {
+bool site_space_allows(int space, int domain)
+{
+    if (space < 0)
+        return true;
+    // Class 3 is impassable ground, for example water.
+    if (space == 3)
+        return false;
+    if (domain == IN_BUILDING)
+        return space == 1;
+    if (domain == IN_CAR)
+        return space == 2;
+    return space == 0 || space == 2;
+}
+
 std::string escape_influx_tag(const std::string &value)
 {
     std::string out;
@@ -105,6 +119,26 @@ ue::ue(int _id,
         phy_s(_id, ue_c, _scenario_c, _phy_enb_config)
 {
     id = _id;
+    if (map.buildingLossBaked())
+    {
+        phy_dl.set_building_loss_baked(true);
+        phy_ul.set_building_loss_baked(true);
+    }
+    if (map.hasSpace())
+    {
+        int domain = phy_s.get_o2i();
+        if (ue_c.ue_m.o2i == LOCATION_RANDOM && domain == IN_CAR)
+        {
+            phy_s.set_location(OUTDOOR);
+            domain = OUTDOOR;
+        }
+        mobility_m.constrain_to_space(
+            [this, domain](float x, float y)
+            {
+                return site_space_allows(map.spaceAt(x, y), domain);
+            },
+            ue_c.mobility_c.random_init);
+    }
     control_id = ue_c.control_id.empty() ? std::to_string(id) : ue_c.control_id;
     // The knob is absolute: it starts at the .ini value and replaces it from then on.
     ctl.priority = ue_c.priority;

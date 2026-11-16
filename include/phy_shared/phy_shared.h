@@ -24,6 +24,9 @@ public:
     int verify_outdoor_to_indoor();
     float get_correlation_distance();
     int get_o2i();
+    // Replaces a resolved random draw. Used when a site map keeps a rural
+    // "vehicle" draw on outdoor ground and must not add vehicle loss.
+    void set_location(int location);
     float get_building_penetration_sample() const;
     float get_vehicle_penetration_sample() const;
     float get_indoor_depth(float distance) const;

@@ -14,6 +14,7 @@
 #include <unistd.h>
 
 #include <mac_layer/metric_handler.h>
+#include <nlohmann/json.hpp>
 #include <utils/terminal_logging.h>
 #include <utils/monitoring/monitoring_config.h>
 
@@ -39,6 +40,27 @@ std::string getBaseMapPath()
     }
 
     return map_dir + prefix;
+}
+
+bool map_frequency_disagrees(const std::string &map_file, float frequency_hz)
+{
+    std::ifstream file(map_file);
+    if (!file.is_open())
+        return false;
+    try
+    {
+        nlohmann::json data;
+        file >> data;
+        if (!data.contains("metadata") || !data["metadata"].contains("frequency_ghz"))
+            return false;
+        const double map_ghz = data["metadata"]["frequency_ghz"].get<double>();
+        const double configured_ghz = static_cast<double>(frequency_hz) / 1e9;
+        return std::abs(map_ghz - configured_ghz) > 1e-3;
+    }
+    catch (const nlohmann::json::exception &)
+    {
+        return false;
+    }
 }
 
 ue_full_config::ue_full_config()
@@ -722,6 +744,15 @@ void configuration_loader::load(std::string cfg_file)
     if (map_file.empty())
         throw std::invalid_argument(
             "no map is available for the configured scenario and frequency");
+    // The site baker freezes ABG at metadata.frequency_ghz. A different carrier
+    // still runs; the warning is the mismatch, not a second path-loss model.
+    if (map_frequency_disagrees(map_file, frequency))
+    {
+        LOG_WARNING_I("configuration_loader::load")
+            << "Map " << map_file
+            << " was generated for a different carrier than eNBConfig frequency "
+            << frequency << " Hz" << END();
+    }
 
     // Once the whole file has been read, so that run_id decides the name no matter
     // where it appears in it.

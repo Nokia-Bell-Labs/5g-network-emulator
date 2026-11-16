@@ -80,3 +80,6 @@ venv.bak/
 .coverage.*
 htmlcov/
 pip-wheel-metadata/
+
+# Editor
+.cursor/

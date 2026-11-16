@@ -28,6 +28,10 @@
 
 std::string getBaseMapPath();
 
+// True when the map records a carrier frequency that is not frequency_hz.
+// A map without metadata.frequency_ghz does not disagree.
+bool map_frequency_disagrees(const std::string &map_file, float frequency_hz);
+
 #define DURATION_DEFAULT 10.0f
 #define PERIOD_DEFAULT 1.0f
 #define PROGRESS_LOG_PERIOD_S_DEFAULT 10.0f

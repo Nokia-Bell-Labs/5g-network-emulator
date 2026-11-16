@@ -127,6 +127,10 @@ public:
     // both. Stored in a member for the duration of the call instead of threaded through
     // estimate_sinr; only this UE's own thread is inside estimate_channel_state.
     void estimate_channel_state(float distance, phy_shared &phy_s, float macro_fading, int o2i, int _tx_dir, const pos2d &pos, double oldest_t, float avg_tp, double _current_t, float sinr_offset_db);
+    // Site maps already store facade and indoor-depth loss in the gain grid.
+    // Vehicle loss is unchanged. Catalog maps leave this false.
+    void set_building_loss_baked(bool baked) { building_loss_baked = baked; }
+    float get_additive_loss_db() const { return pltw + plin; }
 
 private:
     void init_metric(int _index);
@@ -315,6 +319,7 @@ private:
     int o2i;
     int penetration_profile = PENETRATION_LEGACY_AUTO;
     int vehicle_profile = VEHICLE_STANDARD;
+    bool building_loss_baked = false;
     int tx_dir = TX_DL;
 private:
     pos2d prev_pos;

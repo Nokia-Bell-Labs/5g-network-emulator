@@ -65,6 +65,10 @@ public:
         current_pos = pos2d(cx, cy);
         current_distance = current_pos.get_distance();
     }
+    // Random steps must also satisfy this predicate. set_pos does not, so an
+    // external pose such as the teleoperated vehicle is not snapped onto the raster.
+    void set_space_predicate(std::function<bool(float, float)> predicate);
+    void resample_in_space();
     // Speed in m/s, the internal unit. The km/h of the .ini and of the control channel is
     // converted by the caller with the same TOMS constant the loader uses.
     void set_speed(float speed_ms) { speed = speed_ms; }
@@ -72,7 +76,9 @@ public:
     float get_apothem() const { return max_apothem; }
    
 
-protected: 
+protected:
+    bool admits_step(float x, float y) const;
+
     float new_speed()
     {
         return uniform_dist(uniform_gen)*speed_var;
@@ -90,7 +96,8 @@ protected:
     double time_target_var;
     double t_target;
     double past_t;
-  
+    std::function<bool(float, float)> space_predicate;
+
 };
 
 #endif

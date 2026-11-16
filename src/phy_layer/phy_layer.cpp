@@ -990,18 +990,31 @@ void phy_layer::estimate_channel_state(float distance, phy_shared &phy_s, float 
 
     if (!d_in_computed)
     {
-        d_in =
-            o2i == IN_BUILDING
-                    && penetration_profile != PENETRATION_NONE
-                ? phy_s.get_indoor_depth(distance)
-                : 0.0f;
-        pltw = compute_penetration_losses(
-            phy_s.get_building_penetration_sample(),
-            phy_s.get_vehicle_penetration_sample());
-        plin =
-            o2i == IN_BUILDING
-                ? 0.5f * d_in
-                : 0.0f;
+        if (building_loss_baked)
+        {
+            d_in = 0.0f;
+            plin = 0.0f;
+            pltw =
+                o2i == IN_CAR
+                    ? vehicle_penetration_loss_db(
+                          vehicle_profile, phy_s.get_vehicle_penetration_sample())
+                    : 0.0f;
+        }
+        else
+        {
+            d_in =
+                o2i == IN_BUILDING
+                        && penetration_profile != PENETRATION_NONE
+                    ? phy_s.get_indoor_depth(distance)
+                    : 0.0f;
+            pltw = compute_penetration_losses(
+                phy_s.get_building_penetration_sample(),
+                phy_s.get_vehicle_penetration_sample());
+            plin =
+                o2i == IN_BUILDING
+                    ? 0.5f * d_in
+                    : 0.0f;
+        }
 
         d_in_computed = true;
     }

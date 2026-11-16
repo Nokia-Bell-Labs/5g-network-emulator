@@ -35,6 +35,12 @@ int phy_shared::get_o2i(){
     return o2i;
 }
 
+void phy_shared::set_location(int location)
+{
+    o2i = location;
+    correlation_distance = get_correlation_distance();
+}
+
 float phy_shared::get_building_penetration_sample() const
 {
     return building_penetration_sample;

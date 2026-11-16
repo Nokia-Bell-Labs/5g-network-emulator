@@ -1,4 +1,5 @@
 #include <map/map_handler.h>
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -72,6 +73,26 @@ void MapHandler::loadMap(const std::string &filename)
                     "v2 map requires grid_origin=explicit-center-cell");
             }
         }
+
+        if (
+            jsonData.contains("metadata")
+            && jsonData["metadata"].contains("o2i_model")
+            && jsonData["metadata"]["o2i_model"] == "baked-geometric")
+        {
+            building_loss_baked = true;
+        }
+
+        if (jsonData.contains("space"))
+        {
+            space = jsonData["space"].get<std::vector<std::vector<int>>>();
+            if (space.size() != map.size())
+                throw std::runtime_error("space row count does not match the gain map");
+            for (size_t row = 0; row < space.size(); ++row)
+            {
+                if (space[row].size() != map[row].size())
+                    throw std::runtime_error("space grid is not the same shape as the gain map");
+            }
+        }
     }
     catch (json::parse_error &e)
     {
@@ -97,6 +118,32 @@ int MapHandler::getCellNumber() const
 float MapHandler::getMaxApothem() const
 {
     return maxApothem;
+}
+
+bool MapHandler::hasSpace() const
+{
+    return !space.empty();
+}
+
+bool MapHandler::buildingLossBaked() const
+{
+    return building_loss_baked;
+}
+
+int MapHandler::spaceAt(float x, float y) const
+{
+    if (space.empty())
+        return -1;
+
+    const float origin_index =
+        schemaVersion >= 2
+            ? (cellNumber - 1) / 2.0f
+            : cellNumber / 2.0f;
+    int x_index = (int)std::lround(x / cellSize + origin_index);
+    int y_index = (int)std::lround(y / cellSize + origin_index);
+    x_index = std::max(0, std::min(x_index, cellNumber - 1));
+    y_index = std::max(0, std::min(y_index, cellNumber - 1));
+    return space[y_index][x_index];
 }
 
 // Returns the interpolated shadow fading value at position (x, y)

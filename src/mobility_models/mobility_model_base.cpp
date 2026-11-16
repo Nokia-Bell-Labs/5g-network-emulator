@@ -6,6 +6,8 @@
 
 #include <mobility_models/mobility_model_base.h>
 
+#include <stdexcept>
+
 mobility_model_base::mobility_model_base(int id, pos2d _init_pos, bool _random_init, float _speed, float _speed_var,
                                          float _max_distance, double _time_target, float maxApothem,
                                          double _time_target_var, bool _random_v)
@@ -75,6 +77,42 @@ mobility_model_base::mobility_model_base(int id, mobility_config mobility_c, flo
     t_target = 0;
     target_pos = pos2d();
     past_t = 0;
+}
+
+void mobility_model_base::set_space_predicate(std::function<bool(float, float)> predicate)
+{
+    space_predicate = std::move(predicate);
+}
+
+bool mobility_model_base::admits_step(float x, float y) const
+{
+    if (std::fabs(x) > max_apothem || std::fabs(y) > max_apothem)
+        return false;
+    if (std::sqrt(x * x + y * y) > max_distance)
+        return false;
+    if (space_predicate && !space_predicate(x, y))
+        return false;
+    return true;
+}
+
+void mobility_model_base::resample_in_space()
+{
+    if (!space_predicate)
+        return;
+
+    for (int attempt = 0; attempt < 4000; ++attempt)
+    {
+        const float radius = std::fabs(uniform_dist(uniform_gen) * max_distance);
+        const float theta = std::fabs(uniform_dist(uniform_gen) * 2 * M_PI);
+        const float new_x = radius * std::cos(theta);
+        const float new_y = radius * std::sin(theta);
+        if (radius > 10.0f && admits_step(new_x, new_y))
+        {
+            set_pos(new_x, new_y);
+            return;
+        }
+    }
+    throw std::runtime_error("no mobility sample fell inside the site space");
 }
 
 void mobility_model_base::set_random_initial_position(float max_apothem)

@@ -7,6 +7,7 @@
 #ifndef MOBILITY_MODEL_H
 #define MOBILITY_MODEL_H
 
+#include <functional>
 #include <memory>
 
 #include <mobility_models/mobility_config.h>
@@ -46,6 +47,7 @@ public:
 
     // Runtime control setters. Position in metres, speed in m/s.
     void set_pos(float x, float y);
+    void constrain_to_space(std::function<bool(float, float)> predicate, bool resample);
     void set_speed(float speed_ms);
     float get_speed();
     float get_apothem();

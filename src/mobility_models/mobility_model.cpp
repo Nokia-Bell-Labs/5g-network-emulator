@@ -60,6 +60,13 @@ void mobility_model::set_pos(float x, float y)
     mob_model->set_pos(x, y);
 }
 
+void mobility_model::constrain_to_space(std::function<bool(float, float)> predicate, bool resample)
+{
+    mob_model->set_space_predicate(std::move(predicate));
+    if (resample)
+        mob_model->resample_in_space();
+}
+
 void mobility_model::set_speed(float speed_ms)
 {
     mob_model->set_speed(speed_ms);
