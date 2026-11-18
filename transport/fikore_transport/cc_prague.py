@@ -125,12 +125,28 @@ class Prague:
         window is the controller's.
         """
 
+    def on_congestion_event(
+        self,
+        *,
+        in_nvp: bool = False,
+        pipe_ack_bytes: int | None = None,
+        loss_flight_bytes: int | None = None,
+    ) -> None:
+        """Same as on_dupacks: Prague reacts via its echoed packet counters."""
+        del in_nvp, pipe_ack_bytes, loss_flight_bytes
+
     def on_recovered(self) -> None:
         """Also nothing, for the same reason: there is no recovery episode to leave."""
 
     def on_rto(self) -> None:
         self.lib.prague_reset(self._cc)
         self._refresh()
+
+    def on_nvp_expired(self) -> None:
+        """Reference Prague manages its own pacing/window internally."""
+
+    def on_tx_start(self, idle_us: int) -> None:
+        del idle_us
 
     def pacing_rate_bps(self) -> float | None:
         return self._rate_bytes_s * 8.0

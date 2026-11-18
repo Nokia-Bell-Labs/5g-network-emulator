@@ -62,11 +62,16 @@ def test_prague_answers_marks_with_the_window_and_not_with_losses():
 
 
 def test_prague_holds_the_queue_where_cubic_fills_it():
-    """The L4S result, which is the reason any of this exists."""
-    prague = bulk(Prague, "ect1")
-    cubic = bulk(Cubic, "not-ect")
+    """The L4S result, which is the reason any of this exists.
+
+    With RFC 9406 HyStart++, CUBIC exits slow start cleanly before overflowing a
+    deep buffer and instead fills the queue during congestion avoidance.
+    """
+    prague = bulk(Prague, "ect1", ttis=6500, queue_bytes=256 * 1024)
+    cubic = bulk(Cubic, "not-ect", ttis=6500, queue_bytes=256 * 1024)
 
     # Same bottleneck, so the same throughput. What differs is the cost of it.
+    assert prague["retransmits"] == 0, prague
     assert prague["mbps"] > cubic["mbps"] * 0.95, (prague["mbps"], cubic["mbps"])
     assert prague["srtt_ms"] < cubic["srtt_ms"] / 2, (prague["srtt_ms"], cubic["srtt_ms"])
     assert cubic["retransmits"] > 100, "the classic flow was supposed to overflow"

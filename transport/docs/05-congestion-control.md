@@ -46,7 +46,8 @@ with:
 - `beta_cubic = 0.7`, retaining 70% of the prior window after congestion;
 - epoch and `W_max` tracking;
 - Reno-friendly region;
-- slow-start and timeout transitions.
+- slow-start (with RFC 9406 HyStart++ Conservative Slow Start exit), RFC 7661
+  rate-limited window validation/decay, and timeout transitions.
 
 The implementation is compared ACK-by-ACK with ns.py v0.4.5. The checked
 1000-ACK reference run records zero-byte maximum congestion-window error.

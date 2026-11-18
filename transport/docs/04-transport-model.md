@@ -72,12 +72,14 @@ ACK processing:
 - informs the congestion controller of newly acknowledged and CE-marked bytes;
 - re-arms or cancels the retransmission timer.
 
-## SACK and loss recovery
+## SACK, RACK-TLP, and loss recovery
 
-Out-of-order arrivals create merged SACK blocks. The sender uses duplicate ACK
-and SACK evidence to identify missing sequence ranges and schedule
-retransmission. Partial cumulative acknowledgements can advance the left edge
-while retaining later SACK information.
+Out-of-order arrivals create merged SACK blocks and duplicate-segment (DSACK)
+indicators. The sender uses RFC 8985 RACK time-based loss detection (with
+adaptive reordering window `reo_wnd` once reordering or DSACK is observed, and
+RFC 6675 duplicate-ACK fallback before reordering is seen) together with RFC
+8985 Tail Loss Probes (TLP). Partial cumulative acknowledgements advance the
+left edge while retaining later SACK information.
 
 This is a research-model recovery path, not a complete implementation of every
 Linux recovery algorithm.

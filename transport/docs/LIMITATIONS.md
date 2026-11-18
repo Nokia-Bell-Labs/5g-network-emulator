@@ -16,8 +16,6 @@ TCP stack. It does not model:
 - receiver-window scaling negotiation;
 - Linux socket-buffer autotuning;
 - PRR;
-- RACK/TLP;
-- HyStart++;
 - kernel qdisc, NIC offload or host scheduling effects.
 
 Flows begin with initialized sender/receiver state and close administratively.
