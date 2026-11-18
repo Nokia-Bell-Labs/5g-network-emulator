@@ -77,16 +77,18 @@ be described as measurements of a host kernel stack. The JSON carries a
 FikoRE-specific metadata block and is not guaranteed to be byte-for-byte
 compatible with every third-party iperf3 parser.
 
-## Persistent connection scope
+## Persistent and multiplexed connection scope
 
-The default `TransportBackend` TCP mode is an HTTP/1.1-style pool: sequential
-objects reuse an idle connection and concurrent objects open separate
-connections. It does not multiplex multiple active objects over one connection
-as HTTP/2 or HTTP/3 would.
+The default `TransportBackend` TCP mode (`persistent`) is an HTTP/1.1-style
+pool: sequential objects reuse an idle connection and concurrent objects open
+separate connections, retiring a connection when an object is cancelled.
 
-Cancelling an object retires its connection after the network tail drains rather
-than reusing it. This isolates object accounting but does not model an HTTP/2
-stream reset that leaves the underlying connection healthy.
+`tcp_connection_mode="multiplexed"` models HTTP/2-like sharing of a single TCP
+connection per UE using RFC 9218 priorities (`urgency` 0..7, non-incremental
+sequential framing by default, optional incremental frame interleaving) and
+`RST_STREAM`-style cancellation of unsent stream tails without closing the
+connection. HTTP/2 HPACK headers, flow-control windows, and QUIC/HTTP/3
+independent per-stream loss recovery are not modelled.
 
 ## Fixed-step execution
 

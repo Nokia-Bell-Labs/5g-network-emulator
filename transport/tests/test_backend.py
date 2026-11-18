@@ -486,6 +486,108 @@ def test_cancelled_ack_over_link_flow_keeps_mapping_until_ack_tail_drains():
     assert not backend._retiring_flows
 
 
+def test_multiplexed_rfc9218_default_serves_sequentially_on_one_connection():
+    backend = build(tcp_connection_mode="multiplexed")
+    for i in range(3):
+        backend.submit_request(0, f"seg-{i}", 90 * 1024)
+    events = drain(backend, 400)
+
+    assert len(backend._connections) == 1
+    assert backend._next_flow == 2, "only one TCP flow should be opened"
+    completed = [e for e in events if isinstance(e, DownloadCompleted)]
+    assert [c.request_id for c in completed] == ["seg-0", "seg-1", "seg-2"]
+
+    first_progress = {}
+    for ev in events:
+        if isinstance(ev, DownloadProgress) and ev.request_id not in first_progress:
+            first_progress[ev.request_id] = ev.time_s
+    done_time = {c.request_id: c.time_s for c in completed}
+    assert first_progress["seg-1"] >= done_time["seg-0"] - 0.011
+    assert first_progress["seg-2"] >= done_time["seg-1"] - 0.011
+
+
+def test_multiplexed_rfc9218_higher_urgency_preempts_prefetch_stream():
+    backend = build(tcp_connection_mode="multiplexed")
+    backend.submit_request(0, "prefetch", 240 * 1024, urgency=5)
+    drain(backend, 3)
+    backend.submit_request(0, "urgent-manifest-seg", 45 * 1024, urgency=1)
+    events = drain(backend, 400)
+
+    completed = [e.request_id for e in events if isinstance(e, DownloadCompleted)]
+    assert completed == ["urgent-manifest-seg", "prefetch"]
+    assert len(backend._connections) == 1
+
+
+def test_multiplexed_cancelling_unscheduled_stream_wastes_zero_bytes():
+    backend = build(tcp_connection_mode="multiplexed")
+    backend.submit_request(0, "active", 240 * 1024)
+    backend.submit_request(0, "queued-preload", 200 * 1024)
+    drain(backend, 3)
+    backend.cancel_request(0, "queued-preload")
+    step_events = backend.advance().events
+    cancelled = [e for e in step_events if isinstance(e, DownloadCancelled)]
+    assert len(cancelled) == 1
+    assert cancelled[0].request_id == "queued-preload"
+    assert cancelled[0].bytes_delivered == 0
+
+    rest = drain(backend, 300)
+    done = [e for e in rest if isinstance(e, DownloadCompleted)]
+    assert [d.request_id for d in done] == ["active"]
+    conn = next(iter(backend._connections.values()))
+    assert conn.flow.receiver.rcv_nxt == 240 * 1024
+
+
+def test_multiplexed_mid_stream_cancel_keeps_warm_cwnd_for_next_request():
+    backend = build(tcp_connection_mode="multiplexed")
+    backend.submit_request(0, "swiped-video", 2 * 1024 * 1024)
+    drain(backend, 25)
+    conn = next(iter(backend._connections.values()))
+    warm_cwnd = conn.flow.sender.cc.cwnd
+    assert warm_cwnd > 15 * MSS
+
+    backend.cancel_request(0, "swiped-video")
+    backend.submit_request(0, "next-video", 120 * 1024)
+    events = drain(backend, 300)
+
+    assert len(backend._connections) == 1
+    assert not backend._retiring_flows, "shared connection must not retire on RST_STREAM"
+    cancelled = [e for e in events if isinstance(e, DownloadCancelled)]
+    completed = [e for e in events if isinstance(e, DownloadCompleted)]
+    assert len(cancelled) == 1 and cancelled[0].request_id == "swiped-video"
+    assert 0 < cancelled[0].bytes_delivered < 2 * 1024 * 1024
+    assert len(completed) == 1 and completed[0].request_id == "next-video"
+    assert conn.flow.receiver.rcv_nxt == cancelled[0].bytes_delivered + 120 * 1024
+
+
+def test_multiplexed_matches_persistent_bulk_speed_and_avoids_mixed_bucket_starvation():
+    # M11 check: 200 Mbps link, 2 MiB transfer -> multiplexed matches persistent completion time
+    times = {}
+    for mode in ("persistent", "multiplexed"):
+        lk = LoopbackLink(LoopbackConfig(rate_bps=200e6, owd_ttis=10, mss=MSS, queue_bytes=2 * 1024 * 1024))
+        be = TransportBackend(lk, BackendConfig(mss=MSS, rwnd=2 * 1024 * 1024, tcp_connection_mode=mode, telemetry_every_windows=None))
+        be.submit_request(0, "obj-a", 1024 * 1024)
+        be.submit_request(0, "obj-b", 1024 * 1024)
+        done_t = None
+        done_cnt = 0
+        for _ in range(250):
+            step = be.advance()
+            done_cnt += sum(1 for e in step.events if isinstance(e, DownloadCompleted))
+            if done_cnt == 2:
+                done_t = step.time_s
+                break
+        assert done_t is not None
+        times[mode] = done_t
+    assert times["multiplexed"] <= times["persistent"] * 1.05, times
+
+    # M10 check: earlier incremental stream is NOT starved by a later non-incremental stream at equal urgency
+    be_mix = build(tcp_connection_mode="multiplexed")
+    be_mix.submit_request(0, "inc-first", 60 * 1024, urgency=3, incremental=True)
+    be_mix.submit_request(0, "non-inc-later", 60 * 1024, urgency=3, incremental=False)
+    evs = drain(be_mix, 300)
+    done_order = [e.request_id for e in evs if isinstance(e, DownloadCompleted)]
+    assert done_order == ["inc-first", "non-inc-later"]
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in sorted(list(globals().items())):

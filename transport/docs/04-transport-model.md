@@ -50,10 +50,14 @@ concurrent object opens another flow. Once a peak of concurrent work subsides,
 at most `max_idle_tcp_connections_per_ue` connections are retained (six by
 default); excess idle flows close administratively.
 
-Objects remain independently attributable through absolute byte ranges in the
-shared connection sequence space. `BackendConfig.tcp_connection_mode="fresh"`
-selects the former one-flow-per-object baseline. The ideal diagnostic transport
-always uses one flow per object.
+Objects remain independently attributable through byte ranges (or slice lists)
+in the shared connection sequence space. `BackendConfig.tcp_connection_mode="fresh"`
+selects the former one-flow-per-object baseline, while
+`BackendConfig.tcp_connection_mode="multiplexed"` keeps one shared TCP
+connection per UE and schedules concurrent streams via RFC 9218 priorities
+(`urgency` 0..7, `incremental=False` sequential FIFO by default) with HTTP/2
+`RST_STREAM`-style per-stream cancellation that preserves the live connection.
+The ideal diagnostic transport always uses one flow per object.
 
 ## Receiver and acknowledgements
 
@@ -78,8 +82,9 @@ Out-of-order arrivals create merged SACK blocks and duplicate-segment (DSACK)
 indicators. The sender uses RFC 8985 RACK time-based loss detection (with
 adaptive reordering window `reo_wnd` once reordering or DSACK is observed, and
 RFC 6675 duplicate-ACK fallback before reordering is seen) together with RFC
-8985 Tail Loss Probes (TLP). Partial cumulative acknowledgements advance the
-left edge while retaining later SACK information.
+8985 Tail Loss Probes (TLP) when the send buffer empties with unacknowledged
+segments in flight. Partial cumulative acknowledgements advance the left edge
+while retaining later SACK information.
 
 This is a research-model recovery path, not a complete implementation of every
 Linux recovery algorithm.

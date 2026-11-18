@@ -49,8 +49,10 @@ FikoRE emulator
 
 Persistent mode is the default and behaves as an HTTP/1.1-style pool. Concurrent
 objects use separate connections when no idle connection is available. Fresh
-mode preserves one initialized TCP flow per object; ideal transport remains
-per-object.
+mode preserves one initialized TCP flow per object, and multiplexed mode keeps
+one shared TCP connection per UE scheduled with RFC 9218 priorities and
+per-stream cancellation without tearing down the connection; ideal transport
+remains per-object.
 
 During `advance()`, connection-wide receiver progress is translated through the
 object's byte range into `DownloadProgress`. Delivery of the full range becomes

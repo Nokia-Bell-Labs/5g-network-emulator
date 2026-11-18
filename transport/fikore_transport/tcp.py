@@ -12,6 +12,7 @@ from __future__ import annotations
 import bisect
 from collections import deque
 from dataclasses import dataclass
+from typing import Callable
 from .cc import AckInfo, CongestionControl
 from .clock import Clock, Scheduler
 from .link import Arrival, Direction, Ecn, Transmit
@@ -86,7 +87,8 @@ class TcpSender:
 
     def __init__(self, flow: int, cc: CongestionControl, clock: Clock, sched: Scheduler,
                  mss: int, direction: Direction = "dl", ecn: Ecn = "not-ect",
-                 pacing: str = "linux", rwnd: int = 4 * 1024 * 1024) -> None:
+                 pacing: str = "linux", rwnd: int = 4 * 1024 * 1024,
+                 pull_fn: Callable[[int], None] | None = None) -> None:
         self.flow = flow
         self.cc = cc
         self.clock = clock
@@ -100,6 +102,7 @@ class TcpSender:
         # ends up in flight. Real senders are bounded by the peer's window and by
         # their own socket buffer, so the model is too.
         self.rwnd = rwnd
+        self.pull_fn = pull_fn
 
         self.snd_una = 0     # first byte not yet acknowledged
         self.snd_nxt = 0     # next byte to put on the wire; rewinds after a timeout
@@ -164,6 +167,16 @@ class TcpSender:
         if nbytes > 0:
             self.finished_at_tti = None
         self.app_available += nbytes
+
+    def app_retract_unsent(self, max_bytes: int) -> int:
+        """Retract up to `max_bytes` not yet put on the wire (for HTTP/2 RST_STREAM)."""
+        if max_bytes <= 0 or self.app_available <= 0:
+            return 0
+        retracted = min(int(max_bytes), self.app_available)
+        self.app_available -= retracted
+        if self.app_available == 0:
+            self._sync_timers()
+        return retracted
 
     def set_unlimited(self) -> None:
         self.app_unlimited = True
@@ -241,10 +254,13 @@ class TcpSender:
         if self.cancelled:
             return []
 
-        budget = self._budget()
         # RFC 7661 Section 4.4.3: check whether an active 5-minute NVP has expired
         self._check_nvp_expiry()
         was_idle = not self.unacked and self._idle_since_us is not None
+
+        budget = self._budget()
+        if self.pull_fn is not None:
+            self.pull_fn(int(max(0.0, budget)) + 2 * self.mss)
 
         out: list[Transmit] = []
         # One retransmission (or RFC 8985 Section 7.3 new-data TLP probe) always fits,

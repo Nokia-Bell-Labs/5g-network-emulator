@@ -120,7 +120,10 @@ configuration fields. Persistent mode is the default: an object reuses an idle
 connection for its UE, or opens another when concurrent objects occupy every
 pooled connection. The idle pool retains at most
 `max_idle_tcp_connections_per_ue` flows. `tcp_connection_mode="fresh"` gives
-every object new TCP state. The backend maps connection byte ranges to:
+every object new TCP state, and `tcp_connection_mode="multiplexed"` shares one
+TCP connection per UE with RFC 9218 stream scheduling (`urgency` 0..7,
+non-incremental FIFO by default) and non-destructive per-stream cancellation.
+The backend maps connection byte ranges to:
 
 - `DownloadProgress`;
 - `DownloadCompleted`;
