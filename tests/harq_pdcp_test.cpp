@@ -146,7 +146,11 @@ int main()
                 1)
             == 500.0f);
         assert(layer.last_charged_grant_bits() == 500);
-        assert(layer.release() == 500.0f);
+        // The packets are ordered, so the second one waits for the first, which is
+        // still in HARQ. The bits are held, not lost.
+        assert(layer.release() == 0.0f);
+        assert(layer.delivered_bits_total() == 0);
+        assert(layer.conservation_residual_bits() == 0);
         assert(
             layer.handle_pkt(
                 1000.0f,
@@ -156,7 +160,8 @@ int main()
                 1)
             == 1000.0f);
         assert(layer.retransmitted_bits_total() == 1000);
-        assert(layer.release() == 1000.0f);
+        assert(layer.release() == 1500.0f);
+        assert(layer.delivered_bits_total() == 1500);
         assert(layer.conservation_residual_bits() == 0);
     }
 
@@ -193,7 +198,10 @@ int main()
         }
         assert(charged == 8);
         assert(effective == 8.0f);
-        assert(layer.delivered_bits_total() == 8);
+        // Packets are ordered: the eight bits that crossed the backhaul belong to a packet
+        // that is not whole yet, so they are held with the rest of it still queued.
+        assert(layer.delivered_bits_total() == 0);
+        assert(layer.pending_bits() == 1000);
         assert(layer.conservation_residual_bits() == 0);
     }
 

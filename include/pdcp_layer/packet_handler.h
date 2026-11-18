@@ -176,6 +176,8 @@ public:
         fate_queue_num_ = queue_num;
     }
 
+    void set_l4s_dual_queue(bool enabled) { l4s_dual_queue_ = enabled; }
+
 protected:
     void push_ingress_pkt(ip_pkt pkt);
     // Reports the final fate of one packet to the registered fate observers (pkt_fate.h). The
@@ -193,6 +195,17 @@ protected:
             report_fate(uid, fate, bits, arrival_t, ce);
     }
     void record_admitted_bits(std::uint64_t bits);
+    // Adds the backhaul delay to pkt.t_out. The backhaul is a FIFO pipe, so the sampled delay
+    // never lets a block depart before one that entered ahead of it: the departure time is
+    // clamped to that of the previous block. Entry order is the order of the calls.
+    void apply_backhaul_delay(harq_pkt &pkt);
+    // Forgets the departure time of the last block. Only valid once the pipe is empty, which
+    // is what a detach guarantees: every block that could be ahead of a new one is gone.
+    void reset_backhaul_fifo()
+    {
+        last_backhaul_t_out_[0] = 0.0;
+        last_backhaul_t_out_[1] = 0.0;
+    }
     virtual bool verdict(
         const ip_pkt& pkt,
         final_packet_verdict verdict);
@@ -205,6 +218,8 @@ protected:
     double current_t = 0;
     double bh_d = 0;
     double bh_d_var = 0;
+    bool l4s_dual_queue_ = false;
+    double last_backhaul_t_out_[2] = {0.0, 0.0};
     int verbosity = 0;
 
     mean_handler<float> tp_mean;

@@ -307,13 +307,17 @@ void test_pdcp_release_flow()
     float first_sent =
         layer.handle_pkt(1500.0f, 0, 30.0f, 10.0f, 1);
     assert(near(first_sent, 1500.0f));
-    assert(near(layer.release(), 1500.0f));
+    // The second packet is cut by the grant. Its first half crosses the backhaul but is
+    // held until the other half arrives, so only the first packet is handed over.
+    assert(near(layer.release(), 1000.0f));
+    assert(layer.conservation_residual_bits() == 0);
 
     float second_sent =
         layer.handle_pkt(1000.0f, 0, 30.0f, 10.0f, 1);
     assert(near(second_sent, 500.0f));
-    assert(near(layer.release(), 500.0f));
+    assert(near(layer.release(), 1000.0f));
     assert(!layer.has_pkts());
+    assert(layer.conservation_residual_bits() == 0);
 }
 
 void test_simulated_pdcp_timeout_drop()

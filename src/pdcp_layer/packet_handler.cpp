@@ -82,10 +82,7 @@ void packet_handler::push(harq_pkt pkt)
         drop(std::move(pkt), bit_fate::queue_dropped);
         return;
     }
-    pkt.t_out += std::max(
-        0.0,
-        pkt.backhaul_d
-            + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
+    apply_backhaul_delay(pkt);
     pkt_list.push_back(std::move(pkt));
     release_high_water_ =
         std::max(release_high_water_, pkt_list.size());
@@ -97,6 +94,27 @@ void packet_handler::drop(harq_pkt pkt, bit_fate fate)
     (void)fate;
 }
 
+void packet_handler::apply_backhaul_delay(harq_pkt &pkt)
+{
+    // The sample is drawn even when the clamp discards it, so the random stream does not
+    // depend on whether a block happened to be overtaken. When DualPI2 is active, L4S and
+    // classic classes maintain separate FIFO clamps so L4S blocks do not inherit positive
+    // backhaul jitter from preceding classic blocks.
+    int q = 0;
+    if (l4s_dual_queue_ && !pkt.pkts.empty())
+    {
+        const std::uint8_t ecn = pkt.pkts.front().original_ecn;
+        if (ecn == ECN_ECT1 || ecn == ECN_CE) q = 1;
+    }
+    const double departure_t = pkt.t_out
+        + std::max(
+            0.0,
+            pkt.backhaul_d
+                + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
+    pkt.t_out = std::max(departure_t, last_backhaul_t_out_[q]);
+    last_backhaul_t_out_[q] = pkt.t_out;
+}
+
 void packet_handler::flush_released()
 {
     for(std::deque<harq_pkt>::const_iterator it = pkt_list.begin(); it != pkt_list.end(); ++it)
@@ -104,6 +122,7 @@ void packet_handler::flush_released()
         record_error(it->bits, bit_fate::queue_dropped);
     }
     pkt_list.clear();
+    reset_backhaul_fifo();
 }
 
 float packet_handler::release()
@@ -294,13 +313,20 @@ std::unique_ptr<packet_handler> make_packet_handler(packet_handler_config cfg)
 
     if(cfg.ue_type == SIM_UE)
     {
-        std::unique_ptr<packet_handler> handler(new simulated_packet_handler(cfg.ue_id, cfg.traffic_c, cfg.pdcp_c, seed, cfg.log_traffic));
+        std::unique_ptr<packet_handler> handler(new simulated_packet_handler(
+            cfg.ue_id,
+            cfg.traffic_c,
+            cfg.pdcp_c,
+            seed,
+            cfg.log_traffic,
+            cfg.l4s_c.enabled));
         handler->set_fate_identity(cfg.ue_id, cfg.tx_dir, -1);
         return handler;
     }
 
     assert(cfg.queue_num >= 0);
     std::unique_ptr<packet_handler> handler(new captured_packet_handler(cfg.queue_num, cfg.init_t, cfg.pdcp_c, seed, cfg.log_quality));
+    handler->set_l4s_dual_queue(cfg.l4s_c.enabled);
     handler->set_fate_identity(cfg.ue_id, cfg.tx_dir, cfg.queue_num);
     return handler;
 }

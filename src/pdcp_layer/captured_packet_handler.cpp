@@ -146,10 +146,7 @@ void captured_packet_handler::drop_ingress_pkt(ip_pkt pkt)
 
 void captured_packet_handler::push(harq_pkt pkt)
 {
-    pkt.t_out += std::max(
-        0.0,
-        pkt.backhaul_d
-            + gauss_dist(gauss_dist_gen) * pkt.backhaul_d_var);
+    apply_backhaul_delay(pkt);
     for(std::deque<ip_pkt>::iterator jt = pkt.pkts.begin(); jt != pkt.pkts.end(); jt++)
     {
         jt->t_out = pkt.t_out;
@@ -175,6 +172,7 @@ void captured_packet_handler::drop(harq_pkt pkt, bit_fate fate)
 void captured_packet_handler::flush_released()
 {
     force_drop_all();
+    reset_backhaul_fifo();
     // Detach is not shutdown: retain any failed verdict state and retry it on
     // subsequent disabled-UE steps rather than aborting the simulation.
     release();

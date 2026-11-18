@@ -114,11 +114,12 @@ run_counters sim_fragments()
     layer.step(0.0);
     layer.step(0.001);
     assert(layer.handle_pkt(1500.0f, 0, 30.0f, 10.0f, 1) == 1500.0f);
-    assert(layer.release() == 1500.0f);
+    // The packets are ordered, so the first piece is held until the packet is whole.
+    assert(layer.release() == 0.0f);
     expect_event_count(0);
     layer.step(0.002);
     assert(layer.handle_pkt(1000.0f, 0, 30.0f, 10.0f, 1) == 500.0f);
-    assert(layer.release() == 500.0f);
+    assert(layer.release() == 2000.0f);
     expect_event_count(1);
     return counters_of(layer);
 }
@@ -210,10 +211,13 @@ run_counters sim_mixed()
     layer.step(0.0);
     layer.step(0.0005);
     assert(layer.handle_pkt(600.0f, 0, 30.0f, 10.0f, 1) == 600.0f);
-    assert(layer.release() == 600.0f);
+    assert(layer.release() == 0.0f);
     expect_event_count(0);
     layer.step(0.01);
     expect_event_count(1);
+    // The packet is lost, so it no longer holds back the ones behind it, and the part that
+    // crossed the backhaul is handed over at the next release.
+    assert(layer.release() == 600.0f);
     return counters_of(layer);
 }
 
