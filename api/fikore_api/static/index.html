@@ -370,7 +370,13 @@
       var side = fading.cellSize * fading.w * m.scale;
       ctx.globalAlpha = fadingAlpha;
       ctx.imageSmoothingEnabled = true;
-      ctx.drawImage(fading.bitmap, m.cx - side / 2, m.cy - side / 2, side, side);
+      // The grid's first row is its south edge. A canvas paints that row at the
+      // top, and toPx puts north at the top, so the picture is flipped here.
+      ctx.save();
+      ctx.translate(m.cx, m.cy);
+      ctx.scale(1, -1);
+      ctx.drawImage(fading.bitmap, -side / 2, -side / 2, side, side);
+      ctx.restore();
       ctx.globalAlpha = 1;
     }
 
